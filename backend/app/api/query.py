@@ -22,8 +22,16 @@ load_dotenv(Path(__file__).resolve().parents[2] / ".env", override=False)
 router = APIRouter(tags=["query"])
 
 
+class HistoryTurn(BaseModel):
+    role: str          # "user" or "assistant"
+    content: str       # plain text summary of the turn
+
+    model_config = ConfigDict(extra="forbid")
+
+
 class QueryRequest(BaseModel):
     query: str
+    history: list[HistoryTurn] = []   # last N turns for context, empty = no context
 
     model_config = ConfigDict(extra="forbid")
 
@@ -37,7 +45,8 @@ class QueryResponse(BaseModel):
 
 @router.post("", response_model=QueryResponse)
 def query_endpoint(payload: QueryRequest, db: Session = Depends(get_db)) -> QueryResponse:
-    raw_plan = generate_query_plan(payload.query)
+    history = [{"role": t.role, "content": t.content} for t in payload.history]
+    raw_plan = generate_query_plan(payload.query, history=history)
     validated_plan = validate_query_plan(raw_plan)
     result = execute_query_plan(db, validated_plan)
     return QueryResponse(plan=validated_plan, result=result)
@@ -54,33 +63,44 @@ def query_endpoint(payload: QueryRequest, db: Session = Depends(get_db)) -> Quer
 
 _NL_SYSTEM_PROMPT = (
     "You are a helpful analyst for an SAP Order-to-Cash (O2C) system. "
-    "Given a user query and the structured result data, write a concise natural language answer "
-    "(2–5 sentences). Be data-specific: mention IDs, counts, amounts, statuses. "
+    "Given a user query, optional conversation history, and the structured result data, "
+    "write a concise natural language answer (2–5 sentences). "
+    "Be data-specific: mention IDs, counts, amounts, statuses. "
+    "If the user is asking a follow-up question, reference the previous context naturally. "
     "Do NOT invent data. If the result is empty, say so clearly. "
     "Do NOT start with 'Based on the data' or 'Sure'. Get straight to the answer."
 )
 
 
-def _build_nl_prompt(user_query: str, plan: dict, result: dict) -> str:
-    # Summarize result concisely so we don't blow the context window
+def _build_nl_prompt(user_query: str, plan: dict, result: dict, history: list | None = None) -> str:
+    # Build conversation context string from history (last 3 turns max to stay concise)
+    history_str = ""
+    if history:
+        recent = history[-6:]  # last 3 exchanges = 6 turns
+        lines = []
+        for turn in recent:
+            role = "User" if turn["role"] == "user" else "Assistant"
+            lines.append(f"{role}: {turn['content']}")
+        history_str = "\n".join(lines) + "\n\n"
+
     intent = plan.get("intent", "")
 
     if intent == "reject":
-        return f"Query: {user_query}\nSystem response: {plan.get('clarification_needed', '')}\nWrite one sentence explaining this to the user."
+        return f"{history_str}Query: {user_query}\nSystem response: {plan.get('clarification_needed', '')}\nWrite one sentence explaining this to the user."
 
     if intent == "trace_flow":
         nodes = result.get("path", {}).get("nodes", [])
         edges = result.get("path", {}).get("edges", [])
-        node_types = {}
+        node_types: dict[str, int] = {}
         for n in nodes:
             node_types[n["type"]] = node_types.get(n["type"], 0) + 1
         summary = f"Found {len(nodes)} nodes ({node_types}) and {len(edges)} edges tracing {plan.get('entity_type')} {plan.get('entity_id')}."
-        return f"User query: {user_query}\nResult summary: {summary}\nAnswer:"
+        return f"{history_str}User query: {user_query}\nResult summary: {summary}\nAnswer:"
 
     if intent == "top_products_by_billing":
         top3 = result.get("results", [])[:3]
         return (
-            f"User query: {user_query}\n"
+            f"{history_str}User query: {user_query}\n"
             f"Top products (first 3 of {len(result.get('results',[]))}): {json.dumps(top3)}\n"
             f"Sort by: {plan.get('sort_by')}\nAnswer:"
         )
@@ -92,7 +112,7 @@ def _build_nl_prompt(user_query: str, plan: dict, result: dict) -> str:
             bt = i.get("break_type", "unknown")
             by_type[bt] = by_type.get(bt, 0) + 1
         return (
-            f"User query: {user_query}\n"
+            f"{history_str}User query: {user_query}\n"
             f"Found {len(issues)} total issues: {by_type}\n"
             f"Answer:"
         )
@@ -101,7 +121,7 @@ def _build_nl_prompt(user_query: str, plan: dict, result: dict) -> str:
         entity = result.get("entity", {})
         related_keys = list(result.get("related", {}).keys())
         return (
-            f"User query: {user_query}\n"
+            f"{history_str}User query: {user_query}\n"
             f"Entity type: {plan.get('entity_type')} | ID: {plan.get('entity_id')}\n"
             f"Entity data: {json.dumps(entity)}\n"
             f"Related: {related_keys}\n"
@@ -197,8 +217,8 @@ def _groq_stream(prompt: str):
 from typing import Iterator
 
 
-def _stream_nl_answer(user_query: str, plan: dict, result: dict):
-    prompt = _build_nl_prompt(user_query, plan, result)
+def _stream_nl_answer(user_query: str, plan: dict, result: dict, history: list | None = None):
+    prompt = _build_nl_prompt(user_query, plan, result, history=history)
     provider = "groq" if os.environ.get("GROQ_API_KEY") else "gemini" if os.environ.get("GEMINI_API_KEY") else None
 
     tokens_yielded = 0
@@ -289,10 +309,11 @@ def query_stream_endpoint(payload: QueryRequest, db: Session = Depends(get_db)):
       {type: 'token',  payload: "word "}  (streamed NL answer)
       {type: 'done'}
     """
+    history = [{"role": t.role, "content": t.content} for t in payload.history]
 
     def generate():
-        # Step 1 – query plan
-        raw_plan = generate_query_plan(payload.query)
+        # Step 1 – query plan (history gives context for pronoun resolution)
+        raw_plan = generate_query_plan(payload.query, history=history)
         validated_plan = validate_query_plan(raw_plan)
         yield _sse("plan", validated_plan)
 
@@ -301,7 +322,7 @@ def query_stream_endpoint(payload: QueryRequest, db: Session = Depends(get_db)):
         yield _sse("result", result)
 
         # Step 3 – stream NL answer token-by-token
-        for token in _stream_nl_answer(payload.query, validated_plan, result):
+        for token in _stream_nl_answer(payload.query, validated_plan, result, history=history):
             yield _sse("token", token)
 
         yield _sse("done", None)

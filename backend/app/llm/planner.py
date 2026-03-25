@@ -125,20 +125,23 @@ def _safe_extract_json(raw_text: str) -> dict[str, Any]:
     return parsed
 
 
-def _groq_chat_completion(system_prompt: str, user_input: str, *, model: str) -> str:
+def _groq_chat_completion(system_prompt: str, user_input: str, *, model: str, history: list | None = None) -> str:
     api_key = os.environ.get("GROQ_API_KEY")
     if not api_key:
         raise RuntimeError("Missing GROQ_API_KEY environment variable")
 
     url = "https://api.groq.com/openai/v1/chat/completions"
+    # Build messages: system + prior turns + current user message
+    messages: list[dict] = [{"role": "system", "content": system_prompt}]
+    for turn in (history or [])[-6:]:  # last 3 exchanges
+        messages.append({"role": turn["role"], "content": turn["content"]})
+    messages.append({"role": "user", "content": user_input})
+
     payload = {
         "model": model,
         "temperature": 0,
         "max_tokens": 1024,
-        "messages": [
-            {"role": "system", "content": system_prompt},
-            {"role": "user", "content": user_input},
-        ],
+        "messages": messages,
     }
 
     req = urllib.request.Request(
@@ -158,7 +161,7 @@ def _groq_chat_completion(system_prompt: str, user_input: str, *, model: str) ->
     return data["choices"][0]["message"]["content"]
 
 
-def _gemini_generate_content(system_prompt: str, user_input: str, *, model: str) -> str:
+def _gemini_generate_content(system_prompt: str, user_input: str, *, model: str, history: list | None = None) -> str:
     api_key = os.environ.get("GEMINI_API_KEY")
     if not api_key:
         raise RuntimeError("Missing GEMINI_API_KEY environment variable")
@@ -167,9 +170,16 @@ def _gemini_generate_content(system_prompt: str, user_input: str, *, model: str)
         f"https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent"
         f"?key={api_key}"
     )
+    # Gemini uses "contents" array for multi-turn; role must be "user" or "model"
+    contents: list[dict] = []
+    for turn in (history or [])[-6:]:
+        gemini_role = "model" if turn["role"] == "assistant" else "user"
+        contents.append({"role": gemini_role, "parts": [{"text": turn["content"]}]})
+    contents.append({"role": "user", "parts": [{"text": user_input}]})
+
     payload = {
         "systemInstruction": {"role": "system", "parts": [{"text": system_prompt}]},
-        "contents": [{"role": "user", "parts": [{"text": user_input}]}],
+        "contents": contents,
         "generationConfig": {"temperature": 0, "maxOutputTokens": 1024},
     }
 
@@ -267,8 +277,8 @@ def _rule_based_plan(user_input: str) -> dict[str, Any] | None:
 
     # ── 1. Guardrails: out-of-scope ───────────────────────────────────────────
     # Reject creative / general knowledge questions before hitting LLM
-    oos_phrases = ["capital of", "who is", "what is the weather", "write a poem",
-                   "tell me a joke", "recipe", "stock price", "translate", "explain quantum"]
+    oos_phrases = ["capital of", "what is the weather", "write a poem",
+                   "tell me a joke", "recipe for", "stock price", "translate this", "explain quantum"]
     if any(p in text for p in oos_phrases):
         return {
             "intent": "reject",
@@ -371,7 +381,201 @@ def _rule_based_plan(user_input: str) -> dict[str, Any] | None:
             types = ["billing_without_journal_entry", "journal_entry_without_clearing"]
         return _broken(types)
 
-    # ── 9. Lookup via verb patterns ───────────────────────────────────────────
+    # ── 9. History-resolved parenthetical — e.g. "Tell me more (billing document 91150217)"
+    # _resolve_with_history appends (entity_type id) to the query. Match that here.
+    _paren_pat = r"\((?:billing document|billing_document|sales order|sales_order|delivery|customer|product)\s+(\d+)\)\s*$"
+    _paren_type_pat = r"\((billing[_ ]document|sales[_ ]order|delivery|customer|product)\s+(\d+)\)"
+    _paren_m = re.search(_paren_type_pat, user_input, re.IGNORECASE)
+    if _paren_m:
+        _raw_label = _paren_m.group(1).lower().replace(" ", "_")
+        _entity_id = _paren_m.group(2)
+        return _lookup(_raw_label, _entity_id)
+
+
+def _apply_defaults(parsed: dict[str, Any]) -> dict[str, Any]:
+    """Apply sane defaults to LLM output to avoid validation failures."""
+    intent = parsed.get("intent")
+
+    if intent == "trace_flow":
+        if "stages" not in parsed or not parsed["stages"]:
+            parsed["stages"] = ["sales_order", "delivery", "billing", "journal_entry", "payment"]
+        if "filters" not in parsed:
+            parsed["filters"] = {"company_code": None, "fiscal_year": None, "include_cancelled": False}
+
+    if intent == "top_products_by_billing":
+        parsed.setdefault("limit", 10)
+        parsed.setdefault("sort_by", "total_net_amount")
+        parsed.setdefault("filters", {})
+        f = parsed["filters"]
+        f.setdefault("date_from", None)
+        f.setdefault("date_to", None)
+        f.setdefault("company_code", None)
+        f.setdefault("customer_id", None)
+        f.setdefault("exclude_cancelled", False)
+        f.setdefault("product_group", None)
+
+    if intent == "find_broken_flows":
+        if "break_types" not in parsed or not parsed["break_types"]:
+            parsed["break_types"] = ALL_BREAK_TYPES
+        parsed.setdefault("filters", {})
+        f = parsed["filters"]
+        f.setdefault("date_from", None)
+        f.setdefault("date_to", None)
+        f.setdefault("company_code", None)
+        f.setdefault("fiscal_year", None)
+
+    if intent == "lookup_entity":
+        parsed.setdefault("include_related", [])
+
+    return parsed
+
+
+def _resolve_with_history(user_input: str, history: list) -> str:
+    """
+    If the user uses a pronoun or vague reference ("it", "that order", "that billing",
+    "tell me more"), extract the most contextually relevant entity ID from history
+    and append it so the rule-based planner can match it.
+
+    Priority: what entity TYPE the user is asking about in this message (e.g. "that billing"
+    → look for billing IDs in history). Falls back to the most recently mentioned entity.
+    """
+    text = user_input.strip().lower()
+    # Trigger resolution if: query has no explicit 6+ digit entity ID AND history exists
+    # This covers "what delivery", "which customer", "associated delivery", etc.
+    has_explicit_id = bool(re.search(r"\b\d{6,}\b", user_input))
+    if has_explicit_id:
+        return user_input  # user gave explicit ID, no need to resolve
+
+    # Determine which entity type the user is asking about in this message.
+    # Search ALL history turns for that specific entity type (not just most recent turn).
+    type_hints = [
+        (["flow", "journey", "trace", "pipeline", "full", "lifecycle"],
+         [(r"\bsales[_\s]order[_\s](\d{6,})\b", "sales order"),
+          (r"\border[_\s](\d{6,})\b", "sales order")]),
+        (["billing", "invoice", "bill"],
+         [(r"\bbilling[_\s](?:doc(?:ument)?[_\s])?(\d{6,})\b", "billing document"),
+          (r"\binvoice[_\s](\d{6,})\b", "billing document")]),
+        (["delivery", "shipment", "shipped"],
+         [(r"\bdelivery[_\s](\d{6,})\b", "delivery")]),
+        (["customer", "client", "partner", "buyer"],
+         [(r"\bcustomer[_\s](\d{6,})\b", "customer")]),
+        (["order", "sales order"],
+         [(r"\bsales[_\s]order[_\s](\d{6,})\b", "sales order"),
+          (r"\border[_\s](\d{6,})\b", "sales order")]),
+    ]
+
+    # Fallback patterns — try all entity types across all history
+    all_patterns = [
+        (r"\bsales[_\s]order[_\s](\d{6,})\b", "sales order"),
+        (r"\bdelivery[_\s](\d{6,})\b", "delivery"),
+        (r"\bbilling[_\s](?:doc(?:ument)?[_\s])?(\d{6,})\b", "billing document"),
+        (r"\bcustomer[_\s](\d{6,})\b", "customer"),
+    ]
+
+    # Which entity type is the user asking about?
+    prioritised_patterns: list = []
+    for keywords, patterns in type_hints:
+        if any(kw in text for kw in keywords):
+            prioritised_patterns = patterns
+            break
+
+    search_patterns = prioritised_patterns if prioritised_patterns else all_patterns
+
+    # Search ALL history turns (most-recent first) for the target entity type
+    all_history_text = " ".join(t.get("content", "") for t in reversed(history)).lower()
+    for pattern, label in search_patterns:
+        m = re.search(pattern, all_history_text)
+        if m:
+            return f"{user_input} ({label} {m.group(1)})"
+
+    # Final fallback: any entity ID across all history
+    for pattern, label in all_patterns:
+        m = re.search(pattern, all_history_text)
+        if m:
+            return f"{user_input} ({label} {m.group(1)})"
+
+    return user_input
+
+
+def generate_query_plan(user_input: str, history: list | None = None) -> dict[str, Any]:
+    """
+    Generate a structured query plan from natural language.
+
+    Priority:
+    1. History-aware pronoun resolution (no LLM)
+    2. Rule-based fast path (no LLM needed)
+    3. GROQ if GROQ_API_KEY set — with full conversation history
+    4. Gemini if GEMINI_API_KEY set — with full conversation history
+    5. Reject with helpful message if no provider configured
+    """
+    history = history or []
+
+    # Resolve vague follow-up references before rule-based matching
+    resolved_input = _resolve_with_history(user_input, history) if history else user_input
+
+    direct_plan = _rule_based_plan(resolved_input)
+    if direct_plan is not None:
+        return direct_plan
+
+    system_prompt = _load_system_prompt()
+
+    provider = "groq" if os.environ.get("GROQ_API_KEY") else "gemini" if os.environ.get("GEMINI_API_KEY") else None
+    if provider is None:
+        return {
+            "intent": "reject",
+            "reason": "out_of_scope",
+            "clarification_needed": (
+                "No LLM provider configured. Set GROQ_API_KEY or GEMINI_API_KEY in backend/.env "
+                "to enable natural language queries. Visit groq.com or ai.google.dev for free API keys."
+            ),
+        }
+
+    try:
+        if provider == "groq":
+            model = os.environ.get("GROQ_MODEL", "llama3-8b-8192")
+            raw = _groq_chat_completion(system_prompt, user_input, model=model, history=history)
+        else:
+            preferred_model = os.environ.get("GEMINI_MODEL", "gemini-2.5-flash-lite")
+            fallback_models = [
+                preferred_model,
+                "gemini-2.5-flash-lite",
+                "gemini-2.0-flash-lite",
+                "gemini-flash-latest",
+            ]
+            last_err: Exception | None = None
+            raw = None
+            for m_name in fallback_models:
+                try:
+                    raw = _gemini_generate_content(system_prompt, user_input, model=m_name, history=history)
+                    break
+                except HTTPError as e:
+                    last_err = e
+                    if getattr(e, "code", None) == 404 or "404" in str(e):
+                        continue
+                    raise
+            if raw is None:
+                assert last_err is not None
+                raise last_err
+    except Exception as e:
+        return {
+            "intent": "reject",
+            "reason": "out_of_scope",
+            "clarification_needed": f"LLM request failed: {type(e).__name__}: {str(e)[:200]}",
+        }
+
+    try:
+        parsed = _safe_extract_json(raw)
+        parsed = _apply_defaults(parsed)
+        return parsed
+    except Exception as e:
+        return {
+            "intent": "reject",
+            "reason": "out_of_scope",
+            "clarification_needed": f"LLM returned invalid JSON: {type(e).__name__}: {str(e)[:200]}",
+        }
+
+
+    # ── 10. Lookup via verb patterns ──────────────────────────────────────────
     for pattern, entity_type in [
         (r"(?:look\s*up|show|fetch|get|find|details?\s+(?:for|of)|info(?:rmation)?\s+(?:for|on|about))\s+(?:customer|client)\s+(?:id\s*)?(\d+)", "customer"),
         (r"(?:look\s*up|show|fetch|get|find|details?\s+(?:for|of)|info(?:rmation)?\s+(?:for|on|about))\s+(?:sales\s*order|order)\s+(?:id\s*)?(\d+)", "sales_order"),
@@ -425,17 +629,90 @@ def _apply_defaults(parsed: dict[str, Any]) -> dict[str, Any]:
     return parsed
 
 
-def generate_query_plan(user_input: str) -> dict[str, Any]:
+def _resolve_with_history(user_input: str, history: list) -> str:
+    """
+    If the user uses a pronoun or vague reference ("it", "that order", "that billing",
+    "tell me more"), extract the most contextually relevant entity ID from history
+    and append it so the rule-based planner can match it.
+
+    Priority: what entity TYPE the user is asking about in this message (e.g. "that billing"
+    → look for billing IDs in history). Falls back to the most recently mentioned entity.
+    """
+    text = user_input.strip().lower()
+    # Trigger resolution if: query has no explicit 6+ digit entity ID AND history exists
+    # This covers "what delivery", "which customer", "associated delivery", etc.
+    has_explicit_id = bool(re.search(r"\b\d{6,}\b", user_input))
+    if has_explicit_id:
+        return user_input  # user gave explicit ID, no need to resolve
+
+    # Determine which entity type the user is asking about in this message.
+    # Search ALL history turns for that specific entity type (not just most recent turn).
+    type_hints = [
+        (["flow", "journey", "trace", "pipeline", "full", "lifecycle"],
+         [(r"\bsales[_\s]order[_\s](\d{6,})\b", "sales order"),
+          (r"\border[_\s](\d{6,})\b", "sales order")]),
+        (["billing", "invoice", "bill"],
+         [(r"\bbilling[_\s](?:doc(?:ument)?[_\s])?(\d{6,})\b", "billing document"),
+          (r"\binvoice[_\s](\d{6,})\b", "billing document")]),
+        (["delivery", "shipment", "shipped"],
+         [(r"\bdelivery[_\s](\d{6,})\b", "delivery")]),
+        (["customer", "client", "partner", "buyer"],
+         [(r"\bcustomer[_\s](\d{6,})\b", "customer")]),
+        (["order", "sales order"],
+         [(r"\bsales[_\s]order[_\s](\d{6,})\b", "sales order"),
+          (r"\border[_\s](\d{6,})\b", "sales order")]),
+    ]
+
+    # Fallback patterns — try all entity types across all history
+    all_patterns = [
+        (r"\bsales[_\s]order[_\s](\d{6,})\b", "sales order"),
+        (r"\bdelivery[_\s](\d{6,})\b", "delivery"),
+        (r"\bbilling[_\s](?:doc(?:ument)?[_\s])?(\d{6,})\b", "billing document"),
+        (r"\bcustomer[_\s](\d{6,})\b", "customer"),
+    ]
+
+    # Which entity type is the user asking about?
+    prioritised_patterns: list = []
+    for keywords, patterns in type_hints:
+        if any(kw in text for kw in keywords):
+            prioritised_patterns = patterns
+            break
+
+    search_patterns = prioritised_patterns if prioritised_patterns else all_patterns
+
+    # Search ALL history turns (most-recent first) for the target entity type
+    all_history_text = " ".join(t.get("content", "") for t in reversed(history)).lower()
+    for pattern, label in search_patterns:
+        m = re.search(pattern, all_history_text)
+        if m:
+            return f"{user_input} ({label} {m.group(1)})"
+
+    # Final fallback: any entity ID across all history
+    for pattern, label in all_patterns:
+        m = re.search(pattern, all_history_text)
+        if m:
+            return f"{user_input} ({label} {m.group(1)})"
+
+    return user_input
+
+
+def generate_query_plan(user_input: str, history: list | None = None) -> dict[str, Any]:
     """
     Generate a structured query plan from natural language.
 
     Priority:
-    1. Rule-based fast path (no LLM needed)
-    2. GROQ if GROQ_API_KEY set
-    3. Gemini if GEMINI_API_KEY set
-    4. Reject with helpful message if no provider configured
+    1. History-aware pronoun resolution (no LLM)
+    2. Rule-based fast path (no LLM needed)
+    3. GROQ if GROQ_API_KEY set — with full conversation history
+    4. Gemini if GEMINI_API_KEY set — with full conversation history
+    5. Reject with helpful message if no provider configured
     """
-    direct_plan = _rule_based_plan(user_input)
+    history = history or []
+
+    # Resolve vague follow-up references before rule-based matching
+    resolved_input = _resolve_with_history(user_input, history) if history else user_input
+
+    direct_plan = _rule_based_plan(resolved_input)
     if direct_plan is not None:
         return direct_plan
 
@@ -455,12 +732,11 @@ def generate_query_plan(user_input: str) -> dict[str, Any]:
     try:
         if provider == "groq":
             model = os.environ.get("GROQ_MODEL", "llama3-8b-8192")
-            raw = _groq_chat_completion(system_prompt, user_input, model=model)
+            raw = _groq_chat_completion(system_prompt, user_input, model=model, history=history)
         else:
             preferred_model = os.environ.get("GEMINI_MODEL", "gemini-2.5-flash-lite")
             fallback_models = [
                 preferred_model,
-                "gemini-2.5-flash-lite",
                 "gemini-2.5-flash-lite",
                 "gemini-2.0-flash-lite",
                 "gemini-flash-latest",
@@ -469,7 +745,390 @@ def generate_query_plan(user_input: str) -> dict[str, Any]:
             raw = None
             for m_name in fallback_models:
                 try:
-                    raw = _gemini_generate_content(system_prompt, user_input, model=m_name)
+                    raw = _gemini_generate_content(system_prompt, user_input, model=m_name, history=history)
+                    break
+                except HTTPError as e:
+                    last_err = e
+                    if getattr(e, "code", None) == 404 or "404" in str(e):
+                        continue
+                    raise
+            if raw is None:
+                assert last_err is not None
+                raise last_err
+    except Exception as e:
+        return {
+            "intent": "reject",
+            "reason": "out_of_scope",
+            "clarification_needed": f"LLM request failed: {type(e).__name__}: {str(e)[:200]}",
+        }
+
+    try:
+        parsed = _safe_extract_json(raw)
+        parsed = _apply_defaults(parsed)
+        return parsed
+    except Exception as e:
+        return {
+            "intent": "reject",
+            "reason": "out_of_scope",
+            "clarification_needed": f"LLM returned invalid JSON: {type(e).__name__}: {str(e)[:200]}",
+        }
+
+
+
+def _apply_defaults(parsed: dict[str, Any]) -> dict[str, Any]:
+    """Apply sane defaults to LLM output to avoid validation failures."""
+    intent = parsed.get("intent")
+
+    if intent == "trace_flow":
+        if "stages" not in parsed or not parsed["stages"]:
+            parsed["stages"] = ["sales_order", "delivery", "billing", "journal_entry", "payment"]
+        if "filters" not in parsed:
+            parsed["filters"] = {"company_code": None, "fiscal_year": None, "include_cancelled": False}
+
+    if intent == "top_products_by_billing":
+        parsed.setdefault("limit", 10)
+        parsed.setdefault("sort_by", "total_net_amount")
+        parsed.setdefault("filters", {})
+        f = parsed["filters"]
+        f.setdefault("date_from", None)
+        f.setdefault("date_to", None)
+        f.setdefault("company_code", None)
+        f.setdefault("customer_id", None)
+        f.setdefault("exclude_cancelled", False)
+        f.setdefault("product_group", None)
+
+    if intent == "find_broken_flows":
+        if "break_types" not in parsed or not parsed["break_types"]:
+            parsed["break_types"] = ALL_BREAK_TYPES
+        parsed.setdefault("filters", {})
+        f = parsed["filters"]
+        f.setdefault("date_from", None)
+        f.setdefault("date_to", None)
+        f.setdefault("company_code", None)
+        f.setdefault("fiscal_year", None)
+
+    if intent == "lookup_entity":
+        parsed.setdefault("include_related", [])
+
+    return parsed
+
+
+def _resolve_with_history(user_input: str, history: list) -> str:
+    """
+    If the user uses a pronoun or vague reference ("it", "that order", "that billing",
+    "tell me more"), extract the most contextually relevant entity ID from history
+    and append it so the rule-based planner can match it.
+
+    Priority: what entity TYPE the user is asking about in this message (e.g. "that billing"
+    → look for billing IDs in history). Falls back to the most recently mentioned entity.
+    """
+    text = user_input.strip().lower()
+    # Trigger resolution if: query has no explicit 6+ digit entity ID AND history exists
+    # This covers "what delivery", "which customer", "associated delivery", etc.
+    has_explicit_id = bool(re.search(r"\b\d{6,}\b", user_input))
+    if has_explicit_id:
+        return user_input  # user gave explicit ID, no need to resolve
+
+    # Determine which entity type the user is asking about in this message.
+    # Search ALL history turns for that specific entity type (not just most recent turn).
+    type_hints = [
+        (["flow", "journey", "trace", "pipeline", "full", "lifecycle"],
+         [(r"\bsales[_\s]order[_\s](\d{6,})\b", "sales order"),
+          (r"\border[_\s](\d{6,})\b", "sales order")]),
+        (["billing", "invoice", "bill"],
+         [(r"\bbilling[_\s](?:doc(?:ument)?[_\s])?(\d{6,})\b", "billing document"),
+          (r"\binvoice[_\s](\d{6,})\b", "billing document")]),
+        (["delivery", "shipment", "shipped"],
+         [(r"\bdelivery[_\s](\d{6,})\b", "delivery")]),
+        (["customer", "client", "partner", "buyer"],
+         [(r"\bcustomer[_\s](\d{6,})\b", "customer")]),
+        (["order", "sales order"],
+         [(r"\bsales[_\s]order[_\s](\d{6,})\b", "sales order"),
+          (r"\border[_\s](\d{6,})\b", "sales order")]),
+    ]
+
+    # Fallback patterns — try all entity types across all history
+    all_patterns = [
+        (r"\bsales[_\s]order[_\s](\d{6,})\b", "sales order"),
+        (r"\bdelivery[_\s](\d{6,})\b", "delivery"),
+        (r"\bbilling[_\s](?:doc(?:ument)?[_\s])?(\d{6,})\b", "billing document"),
+        (r"\bcustomer[_\s](\d{6,})\b", "customer"),
+    ]
+
+    # Which entity type is the user asking about?
+    prioritised_patterns: list = []
+    for keywords, patterns in type_hints:
+        if any(kw in text for kw in keywords):
+            prioritised_patterns = patterns
+            break
+
+    search_patterns = prioritised_patterns if prioritised_patterns else all_patterns
+
+    # Search ALL history turns (most-recent first) for the target entity type
+    all_history_text = " ".join(t.get("content", "") for t in reversed(history)).lower()
+    for pattern, label in search_patterns:
+        m = re.search(pattern, all_history_text)
+        if m:
+            return f"{user_input} ({label} {m.group(1)})"
+
+    # Final fallback: any entity ID across all history
+    for pattern, label in all_patterns:
+        m = re.search(pattern, all_history_text)
+        if m:
+            return f"{user_input} ({label} {m.group(1)})"
+
+    return user_input
+
+
+def generate_query_plan(user_input: str, history: list | None = None) -> dict[str, Any]:
+    """
+    Generate a structured query plan from natural language.
+
+    Priority:
+    1. History-aware pronoun resolution (no LLM)
+    2. Rule-based fast path (no LLM needed)
+    3. GROQ if GROQ_API_KEY set — with full conversation history
+    4. Gemini if GEMINI_API_KEY set — with full conversation history
+    5. Reject with helpful message if no provider configured
+    """
+    history = history or []
+
+    # Resolve vague follow-up references before rule-based matching
+    resolved_input = _resolve_with_history(user_input, history) if history else user_input
+
+    direct_plan = _rule_based_plan(resolved_input)
+    if direct_plan is not None:
+        return direct_plan
+
+    system_prompt = _load_system_prompt()
+
+    provider = "groq" if os.environ.get("GROQ_API_KEY") else "gemini" if os.environ.get("GEMINI_API_KEY") else None
+    if provider is None:
+        return {
+            "intent": "reject",
+            "reason": "out_of_scope",
+            "clarification_needed": (
+                "No LLM provider configured. Set GROQ_API_KEY or GEMINI_API_KEY in backend/.env "
+                "to enable natural language queries. Visit groq.com or ai.google.dev for free API keys."
+            ),
+        }
+
+    try:
+        if provider == "groq":
+            model = os.environ.get("GROQ_MODEL", "llama3-8b-8192")
+            raw = _groq_chat_completion(system_prompt, user_input, model=model, history=history)
+        else:
+            preferred_model = os.environ.get("GEMINI_MODEL", "gemini-2.5-flash-lite")
+            fallback_models = [
+                preferred_model,
+                "gemini-2.5-flash-lite",
+                "gemini-2.0-flash-lite",
+                "gemini-flash-latest",
+            ]
+            last_err: Exception | None = None
+            raw = None
+            for m_name in fallback_models:
+                try:
+                    raw = _gemini_generate_content(system_prompt, user_input, model=m_name, history=history)
+                    break
+                except HTTPError as e:
+                    last_err = e
+                    if getattr(e, "code", None) == 404 or "404" in str(e):
+                        continue
+                    raise
+            if raw is None:
+                assert last_err is not None
+                raise last_err
+    except Exception as e:
+        return {
+            "intent": "reject",
+            "reason": "out_of_scope",
+            "clarification_needed": f"LLM request failed: {type(e).__name__}: {str(e)[:200]}",
+        }
+
+    try:
+        parsed = _safe_extract_json(raw)
+        parsed = _apply_defaults(parsed)
+        return parsed
+    except Exception as e:
+        return {
+            "intent": "reject",
+            "reason": "out_of_scope",
+            "clarification_needed": f"LLM returned invalid JSON: {type(e).__name__}: {str(e)[:200]}",
+        }
+
+
+    # ── 10. Lookup via verb patterns ──────────────────────────────────────────
+    for pattern, entity_type in [
+        (r"(?:look\s*up|show|fetch|get|find|details?\s+(?:for|of)|info(?:rmation)?\s+(?:for|on|about))\s+(?:customer|client)\s+(?:id\s*)?(\d+)", "customer"),
+        (r"(?:look\s*up|show|fetch|get|find|details?\s+(?:for|of)|info(?:rmation)?\s+(?:for|on|about))\s+(?:sales\s*order|order)\s+(?:id\s*)?(\d+)", "sales_order"),
+        (r"(?:look\s*up|show|fetch|get|find|details?\s+(?:for|of)|info(?:rmation)?\s+(?:for|on|about))\s+(?:delivery|shipment)\s+(?:id\s*)?(\d+)", "delivery"),
+        (r"(?:look\s*up|show|fetch|get|find|details?\s+(?:for|of)|info(?:rmation)?\s+(?:for|on|about))\s+(?:billing\s*(?:doc(?:ument)?)?|invoice)\s+(?:id\s*)?(\d+)", "billing_document"),
+        (r"(?:list|show)\s+(?:all\s+)?payments?\s+for\s+(?:billing|invoice)\s+(\d+)", "billing_document"),
+        (r"(?:payments?|invoices?)\s+for\s+(?:order|so)\s+(\d+)", "sales_order"),
+    ]:
+        m = re.search(pattern, text)
+        if m:
+            return _lookup(entity_type, m.group(1))
+
+    return None
+
+
+def _apply_defaults(parsed: dict[str, Any]) -> dict[str, Any]:
+    """Apply sane defaults to LLM output to avoid validation failures."""
+    intent = parsed.get("intent")
+
+    if intent == "trace_flow":
+        if "stages" not in parsed or not parsed["stages"]:
+            parsed["stages"] = ["sales_order", "delivery", "billing", "journal_entry", "payment"]
+        if "filters" not in parsed:
+            parsed["filters"] = {"company_code": None, "fiscal_year": None, "include_cancelled": False}
+
+    if intent == "top_products_by_billing":
+        parsed.setdefault("limit", 10)
+        parsed.setdefault("sort_by", "total_net_amount")
+        parsed.setdefault("filters", {})
+        f = parsed["filters"]
+        f.setdefault("date_from", None)
+        f.setdefault("date_to", None)
+        f.setdefault("company_code", None)
+        f.setdefault("customer_id", None)
+        f.setdefault("exclude_cancelled", False)
+        f.setdefault("product_group", None)
+
+    if intent == "find_broken_flows":
+        if "break_types" not in parsed or not parsed["break_types"]:
+            parsed["break_types"] = ALL_BREAK_TYPES
+        parsed.setdefault("filters", {})
+        f = parsed["filters"]
+        f.setdefault("date_from", None)
+        f.setdefault("date_to", None)
+        f.setdefault("company_code", None)
+        f.setdefault("fiscal_year", None)
+
+    if intent == "lookup_entity":
+        parsed.setdefault("include_related", [])
+
+    return parsed
+
+
+def _resolve_with_history(user_input: str, history: list) -> str:
+    """
+    If the user uses a pronoun or vague reference ("it", "that order", "that billing",
+    "tell me more"), extract the most contextually relevant entity ID from history
+    and append it so the rule-based planner can match it.
+
+    Priority: what entity TYPE the user is asking about in this message (e.g. "that billing"
+    → look for billing IDs in history). Falls back to the most recently mentioned entity.
+    """
+    text = user_input.strip().lower()
+    # Trigger resolution if: query has no explicit 6+ digit entity ID AND history exists
+    # This covers "what delivery", "which customer", "associated delivery", etc.
+    has_explicit_id = bool(re.search(r"\b\d{6,}\b", user_input))
+    if has_explicit_id:
+        return user_input  # user gave explicit ID, no need to resolve
+
+    # Determine which entity type the user is asking about in this message.
+    # Search ALL history turns for that specific entity type (not just most recent turn).
+    type_hints = [
+        (["flow", "journey", "trace", "pipeline", "full", "lifecycle"],
+         [(r"\bsales[_\s]order[_\s](\d{6,})\b", "sales order"),
+          (r"\border[_\s](\d{6,})\b", "sales order")]),
+        (["billing", "invoice", "bill"],
+         [(r"\bbilling[_\s](?:doc(?:ument)?[_\s])?(\d{6,})\b", "billing document"),
+          (r"\binvoice[_\s](\d{6,})\b", "billing document")]),
+        (["delivery", "shipment", "shipped"],
+         [(r"\bdelivery[_\s](\d{6,})\b", "delivery")]),
+        (["customer", "client", "partner", "buyer"],
+         [(r"\bcustomer[_\s](\d{6,})\b", "customer")]),
+        (["order", "sales order"],
+         [(r"\bsales[_\s]order[_\s](\d{6,})\b", "sales order"),
+          (r"\border[_\s](\d{6,})\b", "sales order")]),
+    ]
+
+    # Fallback patterns — try all entity types across all history
+    all_patterns = [
+        (r"\bsales[_\s]order[_\s](\d{6,})\b", "sales order"),
+        (r"\bdelivery[_\s](\d{6,})\b", "delivery"),
+        (r"\bbilling[_\s](?:doc(?:ument)?[_\s])?(\d{6,})\b", "billing document"),
+        (r"\bcustomer[_\s](\d{6,})\b", "customer"),
+    ]
+
+    # Which entity type is the user asking about?
+    prioritised_patterns: list = []
+    for keywords, patterns in type_hints:
+        if any(kw in text for kw in keywords):
+            prioritised_patterns = patterns
+            break
+
+    search_patterns = prioritised_patterns if prioritised_patterns else all_patterns
+
+    # Search ALL history turns (most-recent first) for the target entity type
+    all_history_text = " ".join(t.get("content", "") for t in reversed(history)).lower()
+    for pattern, label in search_patterns:
+        m = re.search(pattern, all_history_text)
+        if m:
+            return f"{user_input} ({label} {m.group(1)})"
+
+    # Final fallback: any entity ID across all history
+    for pattern, label in all_patterns:
+        m = re.search(pattern, all_history_text)
+        if m:
+            return f"{user_input} ({label} {m.group(1)})"
+
+    return user_input
+
+
+def generate_query_plan(user_input: str, history: list | None = None) -> dict[str, Any]:
+    """
+    Generate a structured query plan from natural language.
+
+    Priority:
+    1. History-aware pronoun resolution (no LLM)
+    2. Rule-based fast path (no LLM needed)
+    3. GROQ if GROQ_API_KEY set — with full conversation history
+    4. Gemini if GEMINI_API_KEY set — with full conversation history
+    5. Reject with helpful message if no provider configured
+    """
+    history = history or []
+
+    # Resolve vague follow-up references before rule-based matching
+    resolved_input = _resolve_with_history(user_input, history) if history else user_input
+
+    direct_plan = _rule_based_plan(resolved_input)
+    if direct_plan is not None:
+        return direct_plan
+
+    system_prompt = _load_system_prompt()
+
+    provider = "groq" if os.environ.get("GROQ_API_KEY") else "gemini" if os.environ.get("GEMINI_API_KEY") else None
+    if provider is None:
+        return {
+            "intent": "reject",
+            "reason": "out_of_scope",
+            "clarification_needed": (
+                "No LLM provider configured. Set GROQ_API_KEY or GEMINI_API_KEY in backend/.env "
+                "to enable natural language queries. Visit groq.com or ai.google.dev for free API keys."
+            ),
+        }
+
+    try:
+        if provider == "groq":
+            model = os.environ.get("GROQ_MODEL", "llama3-8b-8192")
+            raw = _groq_chat_completion(system_prompt, user_input, model=model, history=history)
+        else:
+            preferred_model = os.environ.get("GEMINI_MODEL", "gemini-2.5-flash-lite")
+            fallback_models = [
+                preferred_model,
+                "gemini-2.5-flash-lite",
+                "gemini-2.0-flash-lite",
+                "gemini-flash-latest",
+            ]
+            last_err: Exception | None = None
+            raw = None
+            for m_name in fallback_models:
+                try:
+                    raw = _gemini_generate_content(system_prompt, user_input, model=m_name, history=history)
                     break
                 except HTTPError as e:
                     last_err = e

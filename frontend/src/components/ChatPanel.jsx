@@ -165,6 +165,8 @@ export default function ChatPanel({ onResult }) {
   const [loading, setLoading] = useState(false)
   const bottomRef = useRef(null)
   const inputRef = useRef(null)
+  // Conversation history — last 6 turns sent with every request for context
+  const historyRef = useRef([])
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: 'smooth' })
@@ -179,11 +181,14 @@ export default function ChatPanel({ onResult }) {
     const assistantId = Date.now() + 1
     setMessages(prev => [...prev, { id: assistantId, role: 'assistant', plan: null, result: null, nlAnswer: '', streaming: true }])
 
+    // Snapshot history before this turn (last 6 entries = 3 exchanges)
+    const historySnapshot = historyRef.current.slice(-6)
+
     try {
       const res = await fetch(API_STREAM, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ query: text }),
+        body: JSON.stringify({ query: text, history: historySnapshot }),
       })
       if (!res.ok) throw new Error(`HTTP ${res.status}`)
 
@@ -202,10 +207,34 @@ export default function ChatPanel({ onResult }) {
             if (ev.type === 'plan') setMessages(p => p.map(m => m.id === assistantId ? { ...m, plan: ev.payload } : m))
             if (ev.type === 'result') { onResult?.(ev.payload); setMessages(p => p.map(m => m.id === assistantId ? { ...m, result: ev.payload } : m)) }
             if (ev.type === 'token') setMessages(p => p.map(m => m.id === assistantId ? { ...m, nlAnswer: (m.nlAnswer || '') + ev.payload } : m))
-            if (ev.type === 'done') setMessages(p => p.map(m => m.id === assistantId ? { ...m, streaming: false } : m))
+            if (ev.type === 'done') {
+            setMessages(p => p.map(m => m.id === assistantId ? { ...m, streaming: false } : m))
+          }
           } catch { /* skip */ }
         }
       }
+
+      // Append this exchange to history for next query's context
+      // Get the final nlAnswer from the current assistant message
+      setMessages(current => {
+        const assistantMsg = current.find(m => m.id === assistantId)
+        const nlText = assistantMsg?.nlAnswer || ''
+        const planIntent = assistantMsg?.plan?.intent || ''
+        const resultSummary = assistantMsg?.result
+          ? `[${planIntent} result: ${JSON.stringify(assistantMsg.result).slice(0, 200)}]`
+          : ''
+        const assistantSummary = nlText
+          ? nlText.slice(0, 300)
+          : resultSummary
+
+        historyRef.current = [
+          ...historyRef.current,
+          { role: 'user', content: text },
+          { role: 'assistant', content: assistantSummary },
+        ].slice(-12) // keep last 6 exchanges = 12 turns
+
+        return current
+      })
     } catch (err) {
       setMessages(prev => prev.filter(m => m.id !== assistantId).concat([{ id: assistantId, role: 'error', text: err.message === 'Failed to fetch' ? 'Cannot reach backend. Make sure FastAPI is running on port 8000.' : `Error: ${err.message}` }]))
     } finally { setLoading(false); inputRef.current?.focus() }
