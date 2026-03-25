@@ -117,7 +117,7 @@ def _gemini_stream(prompt: str) -> Iterator[str]:
     if not api_key:
         return  # caller falls back
 
-    model = os.environ.get("GEMINI_MODEL", "gemini-2.0-flash")
+    model = os.environ.get("GEMINI_MODEL", "gemini-2.5-flash-lite")
     url = (
         f"https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent"
         f"?key={api_key}"

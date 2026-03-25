@@ -66,6 +66,35 @@
   color: #1e293b;
 }
 
+/* ↩ Overview — revert to full graph */
+.btn-reset-view {
+  width: auto !important;
+  padding: 0 10px !important;
+  font-size: 11px !important;
+  font-weight: 600 !important;
+  color: #6366f1 !important;
+  border-color: #c7d2fe !important;
+  background: #eef2ff !important;
+  white-space: nowrap;
+}
+.btn-reset-view:hover {
+  background: #e0e7ff !important;
+  color: #4338ca !important;
+}
+
+/* Edge toggle */
+.btn-edge-toggle {
+  width: auto !important;
+  padding: 0 10px !important;
+  font-size: 11px !important;
+  font-weight: 500 !important;
+}
+.btn-edge-toggle.active {
+  background: #1e293b !important;
+  color: #f8fafc !important;
+  border-color: #1e293b !important;
+}
+
 /* ── Canvas ── */
 .graph-canvas {
   flex: 1;

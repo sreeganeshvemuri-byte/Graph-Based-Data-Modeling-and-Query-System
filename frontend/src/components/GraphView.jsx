@@ -50,10 +50,11 @@ function NodeTooltip({ node, onClose }) {
   )
 }
 
-export default function GraphView({ nodes, edges, highlightedIds = [] }) {
+export default function GraphView({ nodes, edges, highlightedIds = [], onResetView }) {
   const cyRef = useRef(null)
   const containerRef = useRef(null)
   const [selectedNode, setSelectedNode] = useState(null)
+  const [edgesVisible, setEdgesVisible] = useState(true)
 
   const elements = useMemo(() => {
     const nodeEls = nodes.map(n => ({
@@ -214,6 +215,15 @@ export default function GraphView({ nodes, edges, highlightedIds = [] }) {
 
   const handleFit = useCallback(() => cyRef.current?.fit(undefined, 60), [])
 
+  // Toggle edge visibility
+  const handleEdgeToggle = useCallback(() => {
+    const cy = cyRef.current
+    if (!cy) return
+    const next = !edgesVisible
+    setEdgesVisible(next)
+    cy.edges().style({ opacity: next ? 0.6 : 0 })
+  }, [edgesVisible])
+
   const isEmpty = nodes.length === 0
 
   return (
@@ -229,9 +239,23 @@ export default function GraphView({ nodes, edges, highlightedIds = [] }) {
           ))}
         </div>
         <div className="graph-controls">
+          {/* Revert to full graph — only shown when query is active */}
+          {onResetView && (
+            <button onClick={onResetView} title="Back to full graph" className="btn-reset-view">
+              ↩ Overview
+            </button>
+          )}
+          {/* Edge dimming toggle */}
+          <button
+            onClick={handleEdgeToggle}
+            title={edgesVisible ? 'Hide edges' : 'Show edges'}
+            className={`btn-edge-toggle ${edgesVisible ? 'active' : ''}`}
+          >
+            {edgesVisible ? '⌇ Edges' : '⌇ Edges'}
+          </button>
           <button onClick={() => cyRef.current?.zoom(cyRef.current.zoom() * 1.25)} title="Zoom in">+</button>
           <button onClick={() => cyRef.current?.zoom(cyRef.current.zoom() * 0.8)} title="Zoom out">−</button>
-          <button onClick={handleFit} title="Fit">⊡</button>
+          <button onClick={handleFit} title="Fit to screen">⊡</button>
         </div>
       </div>
 

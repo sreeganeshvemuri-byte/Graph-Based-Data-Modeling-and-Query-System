@@ -127,9 +127,6 @@ export default function App() {
           <span className="header-title">Order to Cash</span>
         </div>
         <div className="app-header-right">
-          {viewMode === 'query' && (
-            <button className="reset-btn" onClick={handleResetGraph}>← Overview</button>
-          )}
           <span className="app-stats">{graphData.nodes.length} nodes · {graphData.edges.length} edges</span>
           <span className="app-status">
             <span className={`status-dot ${graphStatus === 'ok' ? 'status-ok' : graphStatus === 'error' ? 'status-error' : 'status-loading'}`} />
@@ -139,7 +136,12 @@ export default function App() {
       </header>
       <main className="app-body">
         <section className="pane pane-graph">
-          <GraphView nodes={graphData.nodes} edges={graphData.edges} highlightedIds={highlightedIds} />
+          <GraphView
+            nodes={graphData.nodes}
+            edges={graphData.edges}
+            highlightedIds={highlightedIds}
+            onResetView={viewMode === 'query' ? handleResetGraph : null}
+          />
         </section>
         <div className="pane-divider" />
         <section className="pane pane-chat">
