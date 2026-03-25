@@ -236,6 +236,30 @@ def generate_query_plan(user_input: str) -> dict[str, Any]:
 
     try:
         parsed = _safe_extract_json(raw)
+
+
+        if parsed.get("intent") == "trace_flow":
+            if "stages" not in parsed:
+                parsed["stages"] = [
+                    "sales_order",
+                    "delivery",
+                    "billing",
+                    "journal_entry",
+                    "payment"
+                ]
+            if "filters" not in parsed:
+                parsed["filters"] = {
+                    "company_code": None,
+                    "fiscal_year": None,
+                    "include_cancelled": False
+                }
+
+        if parsed.get("intent") == "top_products_by_billing":
+            parsed.setdefault("filters", {})
+
+        if parsed.get("intent") == "find_broken_flows":
+            parsed.setdefault("filters", {})
+
         return parsed
     except Exception as e:
         return {
