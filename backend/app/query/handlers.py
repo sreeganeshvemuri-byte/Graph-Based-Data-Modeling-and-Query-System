@@ -84,6 +84,89 @@ def _apply_journal_filters(stmt, *, filters: Any):
     return stmt
 
 
+
+
+def _format_dt(value: datetime | None) -> str | None:
+    if value is None:
+        return None
+    return value.isoformat()
+
+
+def _build_node_metadata(session: Session, node_type: str, node_id: str) -> dict[str, Any]:
+    if node_type == "sales_order":
+        row = session.get(SalesOrderHeader, node_id)
+        if not row:
+            return {}
+        return {
+            "sales_order": row.salesOrder,
+            "sold_to_party": row.soldToParty,
+            "total_net_amount": row.totalNetAmount,
+            "status": row.status,
+            "creation_date": _format_dt(row.creationDate),
+        }
+
+    if node_type == "delivery":
+        row = session.get(OutboundDeliveryHeader, node_id)
+        if not row:
+            return {}
+        return {
+            "delivery_document": row.deliveryDocument,
+            "picking_status": row.pickingStatus,
+            "goods_movement_status": row.goodsMovementStatus,
+            "shipping_point": row.shippingPoint,
+        }
+
+    if node_type == "billing_document":
+        row = session.get(BillingDocumentHeader, node_id)
+        if not row:
+            return {}
+        return {
+            "billing_document": row.billingDocument,
+            "sold_to_party": row.soldToParty,
+            "company_code": row.companyCode,
+            "billing_date": _format_dt(row.billingDocumentDate),
+            "fiscal_year": row.fiscalYear,
+            "total_net_amount": row.totalNetAmount,
+            "is_cancelled": row.isCancelled,
+        }
+
+    if node_type == "accounting_document":
+        row = session.execute(
+            select(JournalEntryItemsAR).where(JournalEntryItemsAR.accountingDocument == node_id)
+        ).scalars().first()
+        if not row:
+            return {}
+        return {
+            "accounting_document": row.accountingDocument,
+            "company_code": row.companyCode,
+            "fiscal_year": row.fiscalYear,
+            "posting_date": _format_dt(row.postingDate),
+            "customer": row.customer,
+        }
+
+    if node_type == "customer":
+        row = session.get(BusinessPartner, node_id)
+        if not row:
+            return {}
+        return {
+            "business_partner": row.businessPartner,
+            "full_name": row.fullName,
+            "category": row.category,
+            "is_blocked": row.isBlocked,
+            "grouping": row.grouping,
+        }
+
+    return {}
+
+
+def _trace_nodes_with_metadata(session: Session, nodes: dict[tuple[str, str], NodeRef]) -> list[dict[str, Any]]:
+    enriched: list[dict[str, Any]] = []
+    for n in nodes.values():
+        payload = _node_dict(n)
+        payload["metadata"] = _build_node_metadata(session, n.node_type, n.node_id)
+        enriched.append(payload)
+    return enriched
+
 def handle_trace_flow(session: Session, plan: TraceFlowPlan) -> dict[str, Any]:
     start_node = NodeRef(plan.entity_type if plan.entity_type != "billing_document" else "billing_document", plan.entity_id)
     # Normalize entity_type to our graph node types.
@@ -294,7 +377,7 @@ def handle_trace_flow(session: Session, plan: TraceFlowPlan) -> dict[str, Any]:
         "entity_type": plan.entity_type,
         "entity_id": plan.entity_id,
         "path": {
-            "nodes": [ _node_dict(n) for n in nodes.values() ],
+            "nodes": _trace_nodes_with_metadata(session, nodes),
             "edges": [ _edge_dict(e) for e in unique_edges ],
         },
     }

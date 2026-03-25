@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import os
 from pathlib import Path
 from typing import Generator
 
@@ -10,9 +11,21 @@ from app.db.base import Base
 
 
 def _db_path() -> Path:
-    # backend/app/db/session.py -> backend/app/db -> backend/app -> backend -> repo root
-    repo_root = Path(__file__).resolve().parents[3]
-    return repo_root / "data" / "app.db"
+    """
+    Resolve SQLite path and ensure parent directory exists.
+
+    Defaults to <repo_root>/data/app.db but can be overridden with APP_DB_PATH.
+    """
+    db_path_env = os.environ.get("APP_DB_PATH")
+    if db_path_env:
+        db_path = Path(db_path_env).expanduser().resolve()
+    else:
+        # backend/app/db/session.py -> backend/app/db -> backend/app -> backend -> repo root
+        repo_root = Path(__file__).resolve().parents[3]
+        db_path = repo_root / "data" / "app.db"
+
+    db_path.parent.mkdir(parents=True, exist_ok=True)
+    return db_path
 
 
 DB_URL = f"sqlite:///{_db_path()}"
