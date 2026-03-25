@@ -1,119 +1,98 @@
-import { useEffect, useRef } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import cytoscape from 'cytoscape'
 import './GraphView.css'
 
 const NODE_COLORS = {
-  sales_order:          { bg: '#7c3aed', border: '#5b21b6', text: '#ede9fe' },
-  delivery:             { bg: '#0d9488', border: '#0f766e', text: '#ccfbf1' },
-  billing_document:     { bg: '#ea580c', border: '#c2410c', text: '#ffedd5' },
-  accounting_document:  { bg: '#ca8a04', border: '#a16207', text: '#fef9c3' },
-}
-const DEFAULT_COLOR = { bg: '#475569', border: '#334155', text: '#f1f5f9' }
-
-function buildStylesheet() {
-  const nodeStyles = Object.entries(NODE_COLORS).map(([type, c]) => ({
-    selector: `node[type="${type}"]`,
-    style: {
-      'background-color': c.bg,
-      'border-color': c.border,
-      'color': c.text,
-    }
-  }))
-
-  return [
-    {
-      selector: 'node',
-      style: {
-        'background-color': DEFAULT_COLOR.bg,
-        'border-color': DEFAULT_COLOR.border,
-        'border-width': 2,
-        'color': DEFAULT_COLOR.text,
-        'label': 'data(label)',
-        'text-wrap': 'wrap',
-        'text-max-width': 120,
-        'text-valign': 'center',
-        'text-halign': 'center',
-        'font-size': 11,
-        'font-family': '"JetBrains Mono", "Fira Code", monospace',
-        'font-weight': 500,
-        'width': 130,
-        'height': 52,
-        'shape': 'round-rectangle',
-        'padding': 10,
-        'transition-property': 'background-color, border-color, border-width, opacity',
-        'transition-duration': '200ms',
-      }
-    },
-    ...nodeStyles,
-    {
-      selector: 'node.dimmed',
-      style: { 'opacity': 0.25 }
-    },
-    {
-      selector: 'node.highlighted',
-      style: {
-        'border-width': 3,
-        'border-color': '#f8fafc',
-        'opacity': 1,
-      }
-    },
-    {
-      selector: 'edge',
-      style: {
-        'width': 1.5,
-        'line-color': '#334155',
-        'target-arrow-color': '#334155',
-        'target-arrow-shape': 'triangle',
-        'curve-style': 'bezier',
-        'label': 'data(label)',
-        'font-size': 9,
-        'font-family': '"JetBrains Mono", "Fira Code", monospace',
-        'color': '#94a3b8',
-        'text-background-color': '#0f172a',
-        'text-background-opacity': 1,
-        'text-background-padding': 3,
-        'text-rotation': 'autorotate',
-        'transition-property': 'line-color, target-arrow-color, opacity, width',
-        'transition-duration': '200ms',
-      }
-    },
-    {
-      selector: 'edge.dimmed',
-      style: { 'opacity': 0.15 }
-    },
-    {
-      selector: 'edge.highlighted',
-      style: {
-        'line-color': '#94a3b8',
-        'target-arrow-color': '#94a3b8',
-        'width': 2.5,
-        'opacity': 1,
-      }
-    },
-  ]
+  sales_order: '#7c3aed',
+  delivery: '#0d9488',
+  billing_document: '#ea580c',
+  accounting_document: '#ca8a04',
+  customer: '#2563eb',
+  payment: '#16a34a',
 }
 
-export default function GraphView({ nodes, edges, highlightedIds }) {
-  const containerRef = useRef(null)
+function pretty(text) {
+  return String(text).replace(/_/g, ' ')
+}
+
+export default function GraphView({ nodes, edges }) {
   const cyRef = useRef(null)
+  const containerRef = useRef(null)
+  const [selectedNode, setSelectedNode] = useState(null)
+
+  const elements = useMemo(() => {
+    return [
+      ...nodes.map(n => ({ data: { ...n } })),
+      ...edges.map(e => ({ data: { ...e } })),
+    ]
+  }, [nodes, edges])
 
   useEffect(() => {
     if (!containerRef.current) return
 
-    cyRef.current = cytoscape({
+    const cy = cytoscape({
       container: containerRef.current,
       elements: [],
-      style: buildStylesheet(),
-      layout: { name: 'preset' },
-      userZoomingEnabled: true,
-      userPanningEnabled: true,
-      boxSelectionEnabled: false,
-      minZoom: 0.2,
-      maxZoom: 3,
+      style: [
+        {
+          selector: 'node',
+          style: {
+            'label': 'data(label)',
+            'text-wrap': 'wrap',
+            'text-max-width': 120,
+            'text-valign': 'center',
+            'text-halign': 'center',
+            'font-size': 11,
+            'color': '#e2e8f0',
+            'background-color': '#475569',
+            'border-width': 2,
+            'border-color': '#cbd5e1',
+            'width': 130,
+            'height': 54,
+            'shape': 'round-rectangle',
+          },
+        },
+        ...Object.entries(NODE_COLORS).map(([type, color]) => ({
+          selector: `node[type = "${type}"]`,
+          style: { 'background-color': color },
+        })),
+        {
+          selector: 'edge',
+          style: {
+            'curve-style': 'bezier',
+            'width': 2,
+            'line-color': '#64748b',
+            'target-arrow-color': '#64748b',
+            'target-arrow-shape': 'triangle',
+            'label': 'data(label)',
+            'font-size': 9,
+            'color': '#94a3b8',
+            'text-background-color': '#0f172a',
+            'text-background-opacity': 1,
+            'text-background-padding': 2,
+          },
+        },
+        {
+          selector: 'node:selected',
+          style: {
+            'border-color': '#f8fafc',
+            'border-width': 4,
+          },
+        },
+      ],
+      layout: { name: 'breadthfirst', directed: true, padding: 40 },
+      wheelSensitivity: 0.2,
     })
 
+    cy.on('select', 'node', evt => {
+      const d = evt.target.data()
+      setSelectedNode(d)
+    })
+
+    cyRef.current = cy
+
     return () => {
-      cyRef.current?.destroy()
+      cy.destroy()
       cyRef.current = null
     }
   }, [])
@@ -123,53 +102,47 @@ export default function GraphView({ nodes, edges, highlightedIds }) {
     if (!cy) return
 
     cy.elements().remove()
+    if (!elements.length) {
+      setSelectedNode(null)
+      return
+    }
 
-    if (nodes.length === 0) return
-
-    cy.add([...nodes, ...edges])
-
-    cy.layout({
-      name: 'breadthfirst',
-      directed: true,
-      padding: 40,
-      spacingFactor: 1.4,
-      animate: true,
-      animationDuration: 500,
-      fit: true,
-    }).run()
-  }, [nodes, edges])
-
-  useEffect(() => {
-    const cy = cyRef.current
-    if (!cy || highlightedIds.size === 0) return
-
-    cy.elements().addClass('dimmed').removeClass('highlighted')
-    cy.elements().filter(el => highlightedIds.has(el.id()))
-      .removeClass('dimmed').addClass('highlighted')
-  }, [highlightedIds])
+    cy.add(elements)
+    cy.layout({ name: 'breadthfirst', directed: true, padding: 40, spacingFactor: 1.3 }).run()
+    cy.fit(undefined, 40)
+  }, [elements])
 
   const isEmpty = nodes.length === 0
 
   return (
     <div className="graph-view">
       <div className="graph-toolbar">
-        <span className="graph-label">Graph</span>
+        <span className="graph-label">3D-style Graph</span>
         <div className="graph-legend">
-          {Object.entries(NODE_COLORS).map(([type, c]) => (
+          {Object.entries(NODE_COLORS).map(([type, color]) => (
             <span key={type} className="legend-item">
-              <span className="legend-dot" style={{ background: c.bg }} />
-              {type.replace(/_/g, ' ')}
+              <span className="legend-dot" style={{ background: color }} />
+              {pretty(type)}
             </span>
           ))}
         </div>
         <div className="graph-controls">
-          <button onClick={() => cyRef.current?.fit(undefined, 40)} title="Fit to view">⊡</button>
-          <button onClick={() => cyRef.current?.zoom(cyRef.current.zoom() * 1.2)} title="Zoom in">+</button>
-          <button onClick={() => cyRef.current?.zoom(cyRef.current.zoom() / 1.2)} title="Zoom out">−</button>
+          <button onClick={() => cyRef.current?.fit(undefined, 40)} title="Fit">⊡</button>
         </div>
       </div>
 
       <div className="graph-canvas" ref={containerRef} />
+
+      <div className="meta-panel">
+        {!selectedNode ? (
+          <p className="meta-empty">Select a node to inspect metadata.</p>
+        ) : (
+          <>
+            <h4>{pretty(selectedNode.type)} · {selectedNode.rawId}</h4>
+            <pre>{JSON.stringify(selectedNode.metadata || {}, null, 2)}</pre>
+          </>
+        )}
+      </div>
 
       {isEmpty && (
         <div className="graph-empty">
