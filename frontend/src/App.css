@@ -1,29 +1,18 @@
-*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
-
-:root {
-  --bg:        #0b0f1a;
-  --bg-surface: #111827;
-  --bg-raised:  #1e2433;
-  --border:     #1f2d40;
-  --border-med: #2d3f52;
-  --text:       #e2e8f0;
-  --text-muted: #64748b;
-  --text-dim:   #334155;
-  --accent:     #38bdf8;
-  --accent-dim: #0369a1;
-  --radius:     8px;
-  --font-mono:  "JetBrains Mono", "Fira Code", "Cascadia Code", monospace;
-  --font-sans:  "IBM Plex Sans", system-ui, sans-serif;
+*, *::before, *::after {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
 }
 
 html, body, #root {
   height: 100%;
   overflow: hidden;
-  background: var(--bg);
-  color: var(--text);
-  font-family: var(--font-sans);
-  font-size: 14px;
-  -webkit-font-smoothing: antialiased;
+}
+
+body {
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+  background: #0f172a;
+  color: #e2e8f0;
 }
 
 .app {
@@ -36,73 +25,112 @@ html, body, #root {
   display: flex;
   align-items: center;
   gap: 12px;
-  padding: 0 20px;
-  height: 48px;
-  border-bottom: 1px solid var(--border);
-  background: var(--bg-surface);
+  padding: 0 16px;
+  height: 46px;
+  background: #1e293b;
+  border-bottom: 1px solid #334155;
   flex-shrink: 0;
+  z-index: 10;
 }
 
 .app-logo {
-  font-family: var(--font-mono);
   font-size: 13px;
-  font-weight: 700;
-  letter-spacing: 0.12em;
-  color: var(--accent);
-  border: 1px solid var(--accent-dim);
+  font-weight: 800;
+  color: #fff;
+  background: #7c3aed;
+  border-radius: 6px;
   padding: 2px 8px;
-  border-radius: 4px;
+  letter-spacing: 0.1em;
 }
 
 .app-title {
-  font-size: 13px;
-  font-weight: 500;
-  color: var(--text-muted);
-  letter-spacing: 0.02em;
+  font-size: 14px;
+  font-weight: 600;
+  color: #e2e8f0;
+}
+
+.app-header-right {
+  margin-left: auto;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.reset-btn {
+  background: #334155;
+  border: 1px solid #475569;
+  color: #94a3b8;
+  border-radius: 6px;
+  padding: 4px 12px;
+  font-size: 11px;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+
+.reset-btn:hover {
+  background: #475569;
+  color: #e2e8f0;
+}
+
+.app-stats {
+  font-size: 11px;
+  color: #64748b;
 }
 
 .app-status {
-  margin-left: auto;
   display: flex;
   align-items: center;
   gap: 6px;
   font-size: 11px;
-  font-family: var(--font-mono);
-  color: var(--text-muted);
+  color: #64748b;
 }
 
 .status-dot {
-  width: 6px;
-  height: 6px;
+  width: 7px;
+  height: 7px;
   border-radius: 50%;
+}
+
+.status-ok {
   background: #22c55e;
-  box-shadow: 0 0 6px #22c55e88;
+  box-shadow: 0 0 6px #22c55e80;
+}
+
+.status-error {
+  background: #ef4444;
+}
+
+.status-loading {
+  background: #f59e0b;
+  animation: pulse 1s infinite;
+}
+
+@keyframes pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.4; }
 }
 
 .app-body {
   display: flex;
   flex: 1;
+  min-height: 0;
   overflow: hidden;
 }
 
 .pane {
+  overflow: hidden;
   display: flex;
   flex-direction: column;
-  overflow: hidden;
 }
 
 .pane-graph {
-  flex: 1;
-  border-right: 1px solid var(--border);
+  flex: 1.4;
+  border-right: 1px solid #334155;
+  min-width: 0;
 }
 
 .pane-chat {
-  width: 380px;
-  flex-shrink: 0;
-}
-
-@media (max-width: 768px) {
-  .app-body { flex-direction: column; }
-  .pane-graph { flex: 1; border-right: none; border-bottom: 1px solid var(--border); }
-  .pane-chat { width: 100%; height: 320px; }
+  flex: 1;
+  min-width: 340px;
+  max-width: 480px;
 }
