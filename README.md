@@ -7,9 +7,16 @@
 
 ## Live Demo
 
-🔗 **[https://o2c-graph-explorer.runable.app](https://o2c-graph-explorer.runable.app)**
+🔗 **[https://vdcyw7yuosfys99hmyfprsrtbuygxmg5.runable.site](https://vdcyw7yuosfys99hmyfprsrtbuygxmg5.runable.site)**
 
-Use the suggestions in the chat panel or type any of the queries listed below.
+The demo connects to a live backend with the full SAP O2C dataset loaded (21,393 rows across 19 entity types, 4,164 graph edges). Use the suggestion buttons or type any query in natural language.
+
+**Suggested queries to try:**
+- `Show me the full journey for sales order 740509`
+- `Trace the full flow of billing document 90504274`
+- `Which products have the highest number of billing documents?`
+- `Find all data quality and broken flow issues`
+- `Look up customer 310000108`
 
 ---
 

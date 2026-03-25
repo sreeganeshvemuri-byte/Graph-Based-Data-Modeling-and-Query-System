@@ -7,29 +7,59 @@ const API_STREAM = `${API_BASE}/query/stream`
 const SUGGESTIONS = [
   'Show me the full journey for sales order 740509',
   'Trace the full flow of billing document 90504274',
-  'Which products are associated with the highest number of billing documents?',
-  'Find all deliveries with no sales order',
-  'Show data quality issues in the dataset',
+  'Which products have the highest number of billing documents?',
+  'Find all data quality and broken flow issues',
+  'Identify sales orders with incomplete flows',
   'Look up customer 310000108',
-  'Identify sales orders with broken or incomplete flows',
 ]
 
-function PlanBlock({ plan }) {
+function PlanBadge({ plan }) {
   const [open, setOpen] = useState(false)
+  const intentColors = {
+    trace_flow: '#6366f1',
+    top_products_by_billing: '#0891b2',
+    find_broken_flows: '#dc2626',
+    lookup_entity: '#16a34a',
+    reject: '#94a3b8',
+  }
   return (
-    <div className="plan-block">
-      <button className="plan-toggle" onClick={() => setOpen(o => !o)}>
-        <span className={`plan-arrow ${open ? 'open' : ''}`}>▶</span>
-        <span className="plan-badge">{plan.intent}</span>
-        <span className="plan-toggle-label">query plan</span>
+    <div className="plan-badge-wrap">
+      <button className="plan-badge-btn" onClick={() => setOpen(o => !o)}
+        style={{ borderColor: intentColors[plan.intent] || '#e2e8f0', color: intentColors[plan.intent] || '#94a3b8' }}>
+        <span className="plan-badge-arrow" style={{ transform: open ? 'rotate(90deg)' : 'none' }}>▶</span>
+        {plan.intent?.replace(/_/g, ' ')}
       </button>
-      {open && <pre className="plan-json">{JSON.stringify(plan, null, 2)}</pre>}
+      {open && (
+        <pre className="plan-badge-json">{JSON.stringify(plan, null, 2)}</pre>
+      )}
+    </div>
+  )
+}
+
+function StatPills({ result, plan }) {
+  if (!result || plan?.intent === 'reject') return null
+  const pills = []
+  if (result.path?.nodes?.length > 0) pills.push({ label: `${result.path.nodes.length} nodes`, color: '#6366f1' })
+  if (result.path?.edges?.length > 0) pills.push({ label: `${result.path.edges.length} edges`, color: '#0891b2' })
+  if (result.results?.length > 0) pills.push({ label: `${result.results.length} products`, color: '#0d9488' })
+  if (result.intent === 'find_broken_flows') {
+    const n = result.issues?.length || 0
+    pills.push({ label: n > 0 ? `${n} issues found` : 'No issues', color: n > 0 ? '#dc2626' : '#16a34a' })
+  }
+  if (!pills.length) return null
+  return (
+    <div className="stat-pills">
+      {pills.map(p => (
+        <span key={p.label} className="stat-pill" style={{ color: p.color, borderColor: p.color + '30', background: p.color + '0a' }}>
+          {p.label}
+        </span>
+      ))}
     </div>
   )
 }
 
 function ResultTable({ rows }) {
-  if (!rows || rows.length === 0) return null
+  if (!rows?.length) return null
   const keys = Object.keys(rows[0])
   return (
     <div className="result-table-wrap">
@@ -38,44 +68,50 @@ function ResultTable({ rows }) {
           <tr>{keys.map(k => <th key={k}>{k.replace(/_/g, ' ')}</th>)}</tr>
         </thead>
         <tbody>
-          {rows.slice(0, 20).map((row, i) => (
+          {rows.slice(0, 15).map((row, i) => (
             <tr key={i}>
               {keys.map(k => <td key={k}>{row[k] != null ? String(row[k]) : '—'}</td>)}
             </tr>
           ))}
         </tbody>
       </table>
-      {rows.length > 20 && <p className="result-more">…and {rows.length - 20} more</p>}
+      {rows.length > 15 && <p className="result-more">+{rows.length - 15} more rows</p>}
     </div>
   )
 }
 
-function IssuesList({ issues }) {
-  if (!issues || issues.length === 0) return <p className="no-issues">✓ No issues found</p>
+function IssueList({ issues }) {
+  if (!issues?.length) return <p className="no-issues">✓ No issues detected</p>
+  const byType = {}
+  issues.forEach(i => { byType[i.break_type] = (byType[i.break_type] || 0) + 1 })
   return (
-    <div className="issues-list">
-      {issues.slice(0, 15).map((issue, i) => (
-        <div key={i} className="issue-item">
-          <span className="issue-type">{issue.break_type?.replace(/_/g, ' ')}</span>
-          <span className="issue-detail">
-            {issue.billing_document && `Billing: ${issue.billing_document}`}
-            {issue.delivery && `Delivery: ${issue.delivery}`}
-            {issue.accounting_document && `Acct: ${issue.accounting_document}`}
-            {issue.diff !== undefined && ` (diff: ${issue.diff?.toFixed(2)})`}
-          </span>
+    <div className="issue-list">
+      {Object.entries(byType).map(([type, count]) => (
+        <div key={type} className="issue-row">
+          <span className="issue-count">{count}</span>
+          <span className="issue-type">{type.replace(/_/g, ' ')}</span>
         </div>
       ))}
-      {issues.length > 15 && <p className="result-more">…and {issues.length - 15} more issues</p>}
     </div>
   )
 }
 
-function StreamingText({ text, streaming }) {
+function EntityCard({ result }) {
+  if (!result?.entity) return null
   return (
-    <p className="msg-summary">
-      {text}
-      {streaming && <span className="stream-cursor">▋</span>}
-    </p>
+    <div className="entity-card">
+      <div className="entity-card-label">{result.entity_type?.replace(/_/g, ' ')} · {result.entity_id}</div>
+      <div className="entity-fields">
+        {Object.entries(result.entity)
+          .filter(([, v]) => v != null && v !== '')
+          .map(([k, v]) => (
+            <div key={k} className="entity-field">
+              <span className="entity-key">{k.replace(/([A-Z])/g, ' $1').trim()}</span>
+              <span className="entity-val">{String(v)}</span>
+            </div>
+          ))}
+      </div>
+    </div>
   )
 }
 
@@ -83,15 +119,15 @@ function Message({ msg }) {
   if (msg.role === 'user') {
     return (
       <div className="msg msg-user">
-        <span className="msg-bubble">{msg.text}</span>
+        <span className="msg-bubble-user">{msg.text}</span>
       </div>
     )
   }
   if (msg.role === 'error') {
     return (
       <div className="msg msg-error">
-        <span className="msg-icon">⚠</span>
-        <span className="msg-bubble">{msg.text}</span>
+        <span className="msg-error-icon">⚠</span>
+        <span className="msg-error-text">{msg.text}</span>
       </div>
     )
   }
@@ -100,52 +136,24 @@ function Message({ msg }) {
 
   return (
     <div className="msg msg-assistant">
+      <div className="msg-avatar">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none">
+          <circle cx="12" cy="12" r="10" fill="#1e293b"/>
+          <path d="M8 12h8M12 8v8" stroke="white" strokeWidth="2" strokeLinecap="round"/>
+        </svg>
+      </div>
       <div className="msg-content">
-        {plan && <PlanBlock plan={plan} />}
-
-        {/* Stats pills */}
-        {result && plan?.intent !== 'reject' && (
-          <div className="msg-stats">
-            {result.path?.nodes?.length > 0 && (
-              <span className="stat-pill">📊 {result.path.nodes.length} nodes</span>
-            )}
-            {result.path?.edges?.length > 0 && (
-              <span className="stat-pill">🔗 {result.path.edges.length} edges</span>
-            )}
-            {result.results?.length > 0 && (
-              <span className="stat-pill">📋 {result.results.length} products</span>
-            )}
-            {result.intent === 'find_broken_flows' && (
-              <span className={`stat-pill ${result.issues?.length > 0 ? 'stat-pill-warn' : 'stat-pill-ok'}`}>
-                {result.issues?.length > 0 ? `⚠ ${result.issues.length} issues` : '✓ No issues'}
-              </span>
-            )}
-          </div>
+        {plan && <PlanBadge plan={plan} />}
+        <StatPills result={result} plan={plan} />
+        {nlAnswer !== undefined && (
+          <p className="msg-answer">
+            {nlAnswer}
+            {streaming && <span className="stream-cursor">▋</span>}
+          </p>
         )}
-
-        {/* Streaming NL answer */}
-        {(nlAnswer !== undefined) && (
-          <StreamingText text={nlAnswer} streaming={streaming} />
-        )}
-
-        {/* Inline data tables */}
         {result?.intent === 'top_products_by_billing' && <ResultTable rows={result.results} />}
-        {result?.intent === 'find_broken_flows' && <IssuesList issues={result.issues} />}
-
-        {result?.intent === 'lookup_entity' && result.entity && (
-          <div className="entity-card">
-            <div className="entity-card-header">
-              {result.entity_type?.replace(/_/g, ' ')} · {result.entity_id}
-            </div>
-            <pre className="entity-pre">{JSON.stringify(result.entity, null, 2)}</pre>
-            {result.related && Object.keys(result.related).length > 0 && (
-              <details className="related-details">
-                <summary>Related: {Object.keys(result.related).join(', ')}</summary>
-                <pre className="entity-pre">{JSON.stringify(result.related, null, 2)}</pre>
-              </details>
-            )}
-          </div>
-        )}
+        {result?.intent === 'find_broken_flows' && <IssueList issues={result.issues} />}
+        {result?.intent === 'lookup_entity' && <EntityCard result={result} />}
       </div>
     </div>
   )
@@ -157,7 +165,6 @@ export default function ChatPanel({ onResult }) {
   const [loading, setLoading] = useState(false)
   const bottomRef = useRef(null)
   const inputRef = useRef(null)
-  const abortRef = useRef(null)
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: 'smooth' })
@@ -166,135 +173,96 @@ export default function ChatPanel({ onResult }) {
   const submit = useCallback(async (query) => {
     const text = (query ?? input).trim()
     if (!text || loading) return
-
     setInput('')
-    setMessages(prev => [...prev, { role: 'user', text }])
+    setMessages(prev => [...prev, { id: Date.now(), role: 'user', text }])
     setLoading(true)
-
-    // Add placeholder assistant message
-    const assistantIdx = Date.now()
-    setMessages(prev => [...prev, {
-      role: 'assistant',
-      id: assistantIdx,
-      plan: null,
-      result: null,
-      nlAnswer: '',
-      streaming: true,
-    }])
+    const assistantId = Date.now() + 1
+    setMessages(prev => [...prev, { id: assistantId, role: 'assistant', plan: null, result: null, nlAnswer: '', streaming: true }])
 
     try {
       const res = await fetch(API_STREAM, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ query: text }),
-        signal: abortRef.current?.signal,
       })
-
       if (!res.ok) throw new Error(`HTTP ${res.status}`)
 
       const reader = res.body.getReader()
       const decoder = new TextDecoder()
-      let buffer = ''
-      let planData = null
-      let resultData = null
-
+      let buf = ''
       while (true) {
         const { done, value } = await reader.read()
         if (done) break
-
-        buffer += decoder.decode(value, { stream: true })
-        const lines = buffer.split('\n')
-        buffer = lines.pop() // keep incomplete line
-
+        buf += decoder.decode(value, { stream: true })
+        const lines = buf.split('\n'); buf = lines.pop()
         for (const line of lines) {
           if (!line.startsWith('data:')) continue
-          const raw = line.slice(5).trim()
-          if (!raw) continue
-
-          let event
-          try { event = JSON.parse(raw) } catch { continue }
-
-          if (event.type === 'plan') {
-            planData = event.payload
-            setMessages(prev => prev.map(m =>
-              m.id === assistantIdx ? { ...m, plan: planData } : m
-            ))
-          }
-
-          if (event.type === 'result') {
-            resultData = event.payload
-            onResult?.(resultData)
-            setMessages(prev => prev.map(m =>
-              m.id === assistantIdx ? { ...m, result: resultData } : m
-            ))
-          }
-
-          if (event.type === 'token') {
-            const token = event.payload
-            setMessages(prev => prev.map(m =>
-              m.id === assistantIdx
-                ? { ...m, nlAnswer: (m.nlAnswer || '') + token }
-                : m
-            ))
-          }
-
-          if (event.type === 'done') {
-            setMessages(prev => prev.map(m =>
-              m.id === assistantIdx ? { ...m, streaming: false } : m
-            ))
-          }
+          try {
+            const ev = JSON.parse(line.slice(5).trim())
+            if (ev.type === 'plan') setMessages(p => p.map(m => m.id === assistantId ? { ...m, plan: ev.payload } : m))
+            if (ev.type === 'result') { onResult?.(ev.payload); setMessages(p => p.map(m => m.id === assistantId ? { ...m, result: ev.payload } : m)) }
+            if (ev.type === 'token') setMessages(p => p.map(m => m.id === assistantId ? { ...m, nlAnswer: (m.nlAnswer || '') + ev.payload } : m))
+            if (ev.type === 'done') setMessages(p => p.map(m => m.id === assistantId ? { ...m, streaming: false } : m))
+          } catch { /* skip */ }
         }
       }
     } catch (err) {
-      if (err.name === 'AbortError') return
-      setMessages(prev => {
-        // Replace placeholder with error
-        const filtered = prev.filter(m => m.id !== assistantIdx)
-        return [...filtered, {
-          role: 'error',
-          text: err.message === 'Failed to fetch'
-            ? `Cannot reach backend at ${API_STREAM}.`
-            : `Error: ${err.message}`,
-        }]
-      })
-    } finally {
-      setLoading(false)
-      inputRef.current?.focus()
-    }
+      setMessages(prev => prev.filter(m => m.id !== assistantId).concat([{ id: assistantId, role: 'error', text: err.message === 'Failed to fetch' ? 'Cannot reach backend. Make sure FastAPI is running on port 8000.' : `Error: ${err.message}` }]))
+    } finally { setLoading(false); inputRef.current?.focus() }
   }, [input, loading, onResult])
-
-  function onKey(e) {
-    if (e.key === 'Enter' && !e.shiftKey) {
-      e.preventDefault()
-      submit()
-    }
-  }
-
-  const showSuggestions = messages.length === 0
 
   return (
     <div className="chat-panel">
+      {/* Header */}
       <div className="chat-header">
-        <span className="chat-label">Natural Language Query</span>
-        <span className="chat-hint">O2C dataset only</span>
+        <div className="chat-header-avatar">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none">
+            <circle cx="12" cy="12" r="10" fill="#1e293b"/>
+            <path d="M8 12h8M12 8v8" stroke="white" strokeWidth="2" strokeLinecap="round"/>
+          </svg>
+        </div>
+        <div>
+          <div className="chat-header-name">Graph Agent</div>
+          <div className="chat-header-sub">Order to Cash</div>
+        </div>
+        <span className="chat-header-status">
+          <span className="status-dot-green" />
+          awaiting instructions
+        </span>
       </div>
 
+      {/* Messages */}
       <div className="chat-messages">
-        {showSuggestions && (
-          <div className="suggestions">
-            <p className="suggestions-label">Try a query</p>
-            {SUGGESTIONS.map(s => (
-              <button key={s} className="suggestion-btn" onClick={() => submit(s)}>
-                {s}
-              </button>
-            ))}
+        {/* Welcome */}
+        {messages.length === 0 && (
+          <div className="msg msg-assistant">
+            <div className="msg-avatar">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none">
+                <circle cx="12" cy="12" r="10" fill="#1e293b"/>
+                <path d="M8 12h8M12 8v8" stroke="white" strokeWidth="2" strokeLinecap="round"/>
+              </svg>
+            </div>
+            <div className="msg-content">
+              <p className="msg-answer">Hi! I can help you analyze the <strong>Order to Cash</strong> process. Ask me about sales orders, deliveries, billing documents, payments, or data quality issues.</p>
+              <div className="suggestions">
+                {SUGGESTIONS.map(s => (
+                  <button key={s} className="suggestion-btn" onClick={() => submit(s)}>{s}</button>
+                ))}
+              </div>
+            </div>
           </div>
         )}
 
         {messages.map((msg, i) => <Message key={msg.id || i} msg={msg} />)}
 
-        {loading && messages[messages.length - 1]?.role !== 'assistant' && (
+        {loading && messages[messages.length - 1]?.streaming === true ? null : loading && (
           <div className="msg msg-assistant">
+            <div className="msg-avatar">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none">
+                <circle cx="12" cy="12" r="10" fill="#1e293b"/>
+                <path d="M8 12h8M12 8v8" stroke="white" strokeWidth="2" strokeLinecap="round"/>
+              </svg>
+            </div>
             <div className="loading-dots"><span /><span /><span /></div>
           </div>
         )}
@@ -302,15 +270,16 @@ export default function ChatPanel({ onResult }) {
         <div ref={bottomRef} />
       </div>
 
-      <div className="chat-input-row">
+      {/* Input */}
+      <div className="chat-input-wrap">
         <textarea
           ref={inputRef}
           className="chat-input"
           rows={1}
-          placeholder="Ask about orders, deliveries, billing…"
+          placeholder="Analyze anything"
           value={input}
           onChange={e => setInput(e.target.value)}
-          onKeyDown={onKey}
+          onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); submit() } }}
           disabled={loading}
         />
         <button
@@ -318,7 +287,7 @@ export default function ChatPanel({ onResult }) {
           onClick={() => submit()}
           disabled={!input.trim() || loading}
         >
-          ↑
+          Send
         </button>
       </div>
     </div>

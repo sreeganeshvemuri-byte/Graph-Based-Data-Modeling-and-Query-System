@@ -2,19 +2,52 @@ import { useEffect, useMemo, useRef, useState, useCallback } from 'react'
 import cytoscape from 'cytoscape'
 import './GraphView.css'
 
-export const NODE_COLORS = {
-  sales_order: '#7c3aed',
-  delivery: '#0d9488',
-  billing_document: '#ea580c',
-  accounting_document: '#ca8a04',
-  customer: '#2563eb',
-  payment: '#16a34a',
-  schedule_line: '#db2777',
-  product: '#6366f1',
+const NODE_COLORS = {
+  sales_order:        '#6366f1',
+  delivery:           '#0891b2',
+  billing_document:   '#dc2626',
+  accounting_document:'#d97706',
+  customer:           '#2563eb',
+  payment:            '#16a34a',
+  schedule_line:      '#9333ea',
+  product:            '#0d9488',
 }
 
 function pretty(text) {
   return String(text).replace(/_/g, ' ')
+}
+
+function NodeTooltip({ node, onClose }) {
+  if (!node) return null
+  const meta = node.metadata || {}
+  const entries = Object.entries(meta).filter(([, v]) => v !== null && v !== undefined && v !== '')
+
+  return (
+    <div className="node-tooltip">
+      <div className="node-tooltip-header">
+        <span
+          className="node-tooltip-type"
+          style={{ background: NODE_COLORS[node.type] || '#64748b' }}
+        >
+          {pretty(node.type)}
+        </span>
+        <span className="node-tooltip-id">{node.rawId}</span>
+        <button className="node-tooltip-close" onClick={onClose}>✕</button>
+      </div>
+      {entries.length > 0 ? (
+        <div className="node-tooltip-body">
+          {entries.map(([k, v]) => (
+            <div key={k} className="node-tooltip-row">
+              <span className="node-tooltip-key">{pretty(k)}</span>
+              <span className="node-tooltip-val">{String(v)}</span>
+            </div>
+          ))}
+        </div>
+      ) : (
+        <div className="node-tooltip-empty">No metadata available</div>
+      )}
+    </div>
+  )
 }
 
 export default function GraphView({ nodes, edges, highlightedIds = [] }) {
@@ -22,31 +55,17 @@ export default function GraphView({ nodes, edges, highlightedIds = [] }) {
   const containerRef = useRef(null)
   const [selectedNode, setSelectedNode] = useState(null)
 
-  // Build cytoscape elements — MUST wrap in data: {}
   const elements = useMemo(() => {
     const nodeEls = nodes.map(n => ({
       group: 'nodes',
-      data: {
-        id: n.id,
-        label: n.label || `${pretty(n.type)}\n${n.rawId}`,
-        type: n.type,
-        rawId: n.rawId,
-        metadata: n.metadata || {},
-      },
+      data: { id: n.id, label: n.label, type: n.type, rawId: n.rawId, metadata: n.metadata || {} },
     }))
-
     const edgeEls = edges
       .filter(e => e.source && e.target)
       .map(e => ({
         group: 'edges',
-        data: {
-          id: e.id,
-          source: e.source,
-          target: e.target,
-          label: pretty(e.label || e.edge_type || ''),
-        },
+        data: { id: e.id, source: e.source, target: e.target, label: e.label || '' },
       }))
-
     return [...nodeEls, ...edgeEls]
   }, [nodes, edges])
 
@@ -60,22 +79,15 @@ export default function GraphView({ nodes, edges, highlightedIds = [] }) {
         {
           selector: 'node',
           style: {
-            'label': 'data(label)',
-            'text-wrap': 'wrap',
-            'text-max-width': 120,
-            'text-valign': 'center',
-            'text-halign': 'center',
-            'font-size': 10,
-            'color': '#e2e8f0',
-            'background-color': '#475569',
-            'border-width': 2,
-            'border-color': '#cbd5e1',
-            'width': 140,
-            'height': 56,
-            'shape': 'round-rectangle',
+            'width': 12,
+            'height': 12,
+            'shape': 'ellipse',
+            'background-color': '#94a3b8',
+            'border-width': 0,
+            'label': '',  // NO labels shown by default
           },
         },
-        // Color per node type
+        // Per-type colors
         ...Object.entries(NODE_COLORS).map(([type, color]) => ({
           selector: `node[type = "${type}"]`,
           style: { 'background-color': color },
@@ -84,125 +96,130 @@ export default function GraphView({ nodes, edges, highlightedIds = [] }) {
           selector: 'edge',
           style: {
             'curve-style': 'bezier',
-            'width': 2,
-            'line-color': '#64748b',
-            'target-arrow-color': '#64748b',
+            'width': 1,
+            'line-color': '#bfdbfe',
+            'target-arrow-color': '#bfdbfe',
             'target-arrow-shape': 'triangle',
-            'label': 'data(label)',
-            'font-size': 9,
-            'color': '#94a3b8',
-            'text-background-color': '#0f172a',
-            'text-background-opacity': 1,
-            'text-background-padding': 2,
+            'target-arrow-size': 6,
+            'opacity': 0.7,
           },
         },
         {
           selector: 'node:selected',
           style: {
-            'border-color': '#f8fafc',
-            'border-width': 4,
+            'border-width': 3,
+            'border-color': '#1e293b',
+            'width': 16,
+            'height': 16,
           },
         },
+        // Highlighted nodes (from query results)
         {
           selector: 'node.highlighted',
           style: {
-            'border-color': '#fbbf24',
+            'width': 18,
+            'height': 18,
             'border-width': 3,
-            'background-opacity': 1,
-            'shadow-blur': 18,
-            'shadow-color': '#fbbf24',
-            'shadow-opacity': 0.8,
+            'border-color': '#ffffff',
+            'shadow-blur': 20,
+            'shadow-color': 'data(color)',
+            'shadow-opacity': 0.9,
             'shadow-offset-x': 0,
             'shadow-offset-y': 0,
+            'background-opacity': 1,
           },
         },
         {
           selector: 'node.dimmed',
+          style: { 'opacity': 0.1 },
+        },
+        {
+          selector: 'edge.dimmed',
+          style: { 'opacity': 0.04 },
+        },
+        {
+          selector: 'edge.highlighted-edge',
           style: {
-            'opacity': 0.25,
+            'line-color': '#6366f1',
+            'target-arrow-color': '#6366f1',
+            'width': 2,
+            'opacity': 1,
           },
         },
       ],
-      layout: { name: 'breadthfirst', directed: true, padding: 40 },
-      wheelSensitivity: 0.2,
+      layout: { name: 'preset' },
+      wheelSensitivity: 0.3,
+      minZoom: 0.1,
+      maxZoom: 8,
     })
 
-    cy.on('select', 'node', evt => {
-      setSelectedNode(evt.target.data())
+    cy.on('tap', 'node', evt => {
+      const d = evt.target.data()
+      setSelectedNode(d)
     })
-    cy.on('unselect', 'node', () => {
-      setSelectedNode(null)
+    cy.on('tap', evt => {
+      if (evt.target === cy) setSelectedNode(null)
     })
 
     cyRef.current = cy
-
-    return () => {
-      cy.destroy()
-      cyRef.current = null
-    }
+    return () => { cy.destroy(); cyRef.current = null }
   }, [])
 
-  // Update graph elements when data changes
+  // Update elements
   useEffect(() => {
     const cy = cyRef.current
     if (!cy) return
-
     cy.elements().remove()
     setSelectedNode(null)
-
     if (!elements.length) return
 
     cy.add(elements)
 
-    const layoutName = nodes.length > 50 ? 'cose' : 'breadthfirst'
+    const layoutName = nodes.length > 80 ? 'cose' : 'breadthfirst'
     cy.layout({
       name: layoutName,
       directed: true,
-      padding: 40,
-      spacingFactor: 1.4,
+      padding: 60,
+      spacingFactor: nodes.length > 200 ? 1.0 : 1.6,
       animate: false,
+      nodeRepulsion: () => 4000,
+      idealEdgeLength: () => 80,
+      edgeElasticity: () => 100,
     }).run()
-    cy.fit(undefined, 40)
+    cy.fit(undefined, 60)
   }, [elements])
 
-  // Highlight specific nodes + dim others
+  // Highlighting
   useEffect(() => {
     const cy = cyRef.current
     if (!cy) return
-    cy.nodes().removeClass('highlighted').removeClass('dimmed')
+    cy.elements().removeClass('highlighted').removeClass('dimmed').removeClass('highlighted-edge')
+
     if (highlightedIds.length) {
       const idSet = new Set(highlightedIds)
-      cy.nodes().forEach(node => {
-        if (idSet.has(node.id())) {
-          node.addClass('highlighted')
-        } else {
-          node.addClass('dimmed')
-        }
+      cy.nodes().forEach(n => {
+        if (idSet.has(n.id())) n.addClass('highlighted')
+        else n.addClass('dimmed')
       })
-      // Fit to highlighted nodes
-      const highlighted = cy.nodes('.highlighted')
-      if (highlighted.length > 0) {
-        cy.animate({ fit: { eles: highlighted, padding: 60 } }, { duration: 400 })
-      }
+      cy.edges().forEach(e => {
+        const srcHl = idSet.has(e.source().id())
+        const tgtHl = idSet.has(e.target().id())
+        if (srcHl && tgtHl) e.addClass('highlighted-edge')
+        else e.addClass('dimmed')
+      })
+      const hl = cy.nodes('.highlighted')
+      if (hl.length) cy.animate({ fit: { eles: hl, padding: 80 } }, { duration: 500 })
     }
   }, [highlightedIds])
 
-  const handleFit = useCallback(() => cyRef.current?.fit(undefined, 40), [])
-  const handleZoomIn = useCallback(() => {
-    const cy = cyRef.current
-    if (cy) cy.zoom(cy.zoom() * 1.2)
-  }, [])
-  const handleZoomOut = useCallback(() => {
-    const cy = cyRef.current
-    if (cy) cy.zoom(cy.zoom() * 0.8)
-  }, [])
+  const handleFit = useCallback(() => cyRef.current?.fit(undefined, 60), [])
 
   const isEmpty = nodes.length === 0
 
   return (
     <div className="graph-view">
+      {/* Minimal toolbar */}
       <div className="graph-toolbar">
-        <span className="graph-label">Graph Explorer</span>
         <div className="graph-legend">
           {Object.entries(NODE_COLORS).map(([type, color]) => (
             <span key={type} className="legend-item">
@@ -212,35 +229,24 @@ export default function GraphView({ nodes, edges, highlightedIds = [] }) {
           ))}
         </div>
         <div className="graph-controls">
-          <button onClick={handleZoomIn} title="Zoom In">+</button>
-          <button onClick={handleZoomOut} title="Zoom Out">−</button>
-          <button onClick={handleFit} title="Fit to screen">⊡</button>
+          <button onClick={() => cyRef.current?.zoom(cyRef.current.zoom() * 1.25)} title="Zoom in">+</button>
+          <button onClick={() => cyRef.current?.zoom(cyRef.current.zoom() * 0.8)} title="Zoom out">−</button>
+          <button onClick={handleFit} title="Fit">⊡</button>
         </div>
       </div>
 
+      {/* Canvas */}
       <div className="graph-canvas" ref={containerRef} />
 
-      <div className="meta-panel">
-        {!selectedNode ? (
-          <p className="meta-empty">Click a node to inspect its metadata.</p>
-        ) : (
-          <>
-            <h4 className="meta-title">
-              <span className="meta-badge" style={{ background: NODE_COLORS[selectedNode.type] || '#475569' }}>
-                {pretty(selectedNode.type)}
-              </span>
-              <span className="meta-id">{selectedNode.rawId}</span>
-            </h4>
-            <pre className="meta-pre">{JSON.stringify(selectedNode.metadata || {}, null, 2)}</pre>
-          </>
-        )}
-      </div>
+      {/* Floating node tooltip — only shown on click */}
+      {selectedNode && (
+        <NodeTooltip node={selectedNode} onClose={() => setSelectedNode(null)} />
+      )}
 
       {isEmpty && (
         <div className="graph-empty">
-          <div className="graph-empty-icon">◈</div>
-          <p>Loading the O2C graph…</p>
-          <p className="graph-empty-hint">Or run a query to trace a specific flow</p>
+          <div className="graph-empty-icon">◎</div>
+          <p>Loading graph…</p>
         </div>
       )}
     </div>
