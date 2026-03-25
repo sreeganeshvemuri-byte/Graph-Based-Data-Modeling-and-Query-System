@@ -5,37 +5,28 @@ import './App.css'
 
 export default function App() {
   const [graphData, setGraphData] = useState({ nodes: [], edges: [] })
-  const [highlightedIds, setHighlightedIds] = useState(new Set())
 
   function handleQueryResult(result) {
     if (!result?.path) return
 
     const { nodes = [], edges = [] } = result.path
 
-    const cyNodes = nodes.map(n => ({
-      data: {
-        id: `${n.type}_${n.id}`,
-        label: `${n.type.replace(/_/g, ' ')}\n${n.id}`,
-        type: n.type,
-      }
+    const graphNodes = nodes.map(n => ({
+      id: `${n.type}_${n.id}`,
+      label: `${n.type.replace(/_/g, ' ')}\n${n.id}`,
+      type: n.type,
+      rawId: n.id,
+      metadata: n.metadata || {},
     }))
 
-    const cyEdges = edges.map((e, i) => ({
-      data: {
-        id: `edge_${i}`,
-        source: `${e.source.type}_${e.source.id}`,
-        target: `${e.target.type}_${e.target.id}`,
-        label: e.edge_type,
-      }
+    const graphEdges = edges.map((e, i) => ({
+      id: `edge_${i}`,
+      source: `${e.source.type}_${e.source.id}`,
+      target: `${e.target.type}_${e.target.id}`,
+      label: e.edge_type,
     }))
 
-    const ids = new Set([
-      ...nodes.map(n => `${n.type}_${n.id}`),
-      ...edges.map((_, i) => `edge_${i}`),
-    ])
-
-    setGraphData({ nodes: cyNodes, edges: cyEdges })
-    setHighlightedIds(ids)
+    setGraphData({ nodes: graphNodes, edges: graphEdges })
   }
 
   return (
@@ -50,7 +41,7 @@ export default function App() {
       </header>
       <main className="app-body">
         <section className="pane pane-graph">
-          <GraphView nodes={graphData.nodes} edges={graphData.edges} highlightedIds={highlightedIds} />
+          <GraphView nodes={graphData.nodes} edges={graphData.edges} />
         </section>
         <section className="pane pane-chat">
           <ChatPanel onResult={handleQueryResult} />

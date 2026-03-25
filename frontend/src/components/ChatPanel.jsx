@@ -1,7 +1,8 @@
 import { useState, useRef, useEffect } from 'react'
 import './ChatPanel.css'
 
-const API = 'http://localhost:8000/api/query'
+const API_BASE = (import.meta.env.VITE_API_BASE_URL || '/api').replace(/\/$/, '')
+const API = `${API_BASE}/query`
 
 const SUGGESTIONS = [
   'Show me the full journey for sales order 740509',
@@ -140,7 +141,7 @@ export default function ChatPanel({ onResult }) {
       setMessages(prev => [...prev, {
         role: 'error',
         text: err.message === 'Failed to fetch'
-          ? 'Cannot reach backend at localhost:8000. Is FastAPI running?'
+          ? `Cannot reach backend. Expected API at ${API}. Start FastAPI or set VITE_API_BASE_URL.`
           : `Error: ${err.message}`,
       }])
     } finally {
