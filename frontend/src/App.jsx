@@ -6,44 +6,6 @@ import './App.css'
 export default function App() {
   const [graphData, setGraphData] = useState({ nodes: [], edges: [] })
 
-
-  useEffect(() => {
-    let cancelled = false
-
-    async function loadOverview() {
-      try {
-        const res = await fetch('/api/graph/overview?max_edges=1200')
-        if (!res.ok) return
-        const data = await res.json()
-        if (cancelled) return
-
-        const graphNodes = (data.nodes || []).map(n => ({
-          id: `${n.type}_${n.id}`,
-          label: `${n.type.replace(/_/g, ' ')}\n${n.id}`,
-          type: n.type,
-          rawId: n.id,
-          metadata: n.metadata || {},
-        }))
-
-        const graphEdges = (data.edges || []).map((e, i) => ({
-          id: `edge_boot_${i}`,
-          source: `${e.source.type}_${e.source.id}`,
-          target: `${e.target.type}_${e.target.id}`,
-          label: e.edge_type,
-        }))
-
-        setGraphData({ nodes: graphNodes, edges: graphEdges })
-      } catch {
-        // keep empty graph if backend is unavailable
-      }
-    }
-
-    loadOverview()
-    return () => {
-      cancelled = true
-    }
-  }, [])
-
   function handleQueryResult(result) {
     if (!result?.path) return
 
