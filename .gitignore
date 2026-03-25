@@ -1,0 +1,17 @@
+__pycache__/
+*.pyc
+.venv/
+venv/
+
+# Local sqlite database files
+data/*.db
+
+# Frontend
+node_modules/
+dist/
+.DS_Store
+
+# Local environment variables (never commit)
+.env
+backend/.env
+

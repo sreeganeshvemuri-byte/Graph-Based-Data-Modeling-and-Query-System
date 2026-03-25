@@ -1,0 +1,1473 @@
+Table: billing_document_cancellations
+Columns: accountingDocument, billingDocument, billingDocumentDate, billingDocumentIsCancelled, billingDocumentType, cancelledBillingDocument, companyCode, creationDate, creationTime, fiscalYear, lastChangeDateTime, soldToParty, totalNetAmount, transactionCurrency
+Sample rows:
+  --- row 1 ---
+  {
+    "accountingDocument": "9400000275",
+    "billingDocument": "90504274",
+    "billingDocumentDate": "2025-04-02T00:00:00.000Z",
+    "billingDocumentIsCancelled": true,
+    "billingDocumentType": "F2",
+    "cancelledBillingDocument": "",
+    "companyCode": "ABCD",
+    "creationDate": "2025-04-03T00:00:00.000Z",
+    "creationTime": {
+      "hours": 11,
+      "minutes": 31,
+      "seconds": 13
+    },
+    "fiscalYear": "2025",
+    "lastChangeDateTime": "2025-07-24T11:42:30.485Z",
+    "soldToParty": "320000083",
+    "totalNetAmount": "253.39",
+    "transactionCurrency": "INR"
+  }
+  --- row 2 ---
+  {
+    "accountingDocument": "9400000243",
+    "billingDocument": "90504242",
+    "billingDocumentDate": "2025-04-02T00:00:00.000Z",
+    "billingDocumentIsCancelled": true,
+    "billingDocumentType": "F2",
+    "cancelledBillingDocument": "",
+    "companyCode": "ABCD",
+    "creationDate": "2025-04-03T00:00:00.000Z",
+    "creationTime": {
+      "hours": 11,
+      "minutes": 31,
+      "seconds": 13
+    },
+    "fiscalYear": "2025",
+    "lastChangeDateTime": "2025-07-24T11:42:32.739Z",
+    "soldToParty": "320000083",
+    "totalNetAmount": "151.69",
+    "transactionCurrency": "INR"
+  }
+  --- row 3 ---
+  {
+    "accountingDocument": "9400000240",
+    "billingDocument": "90504239",
+    "billingDocumentDate": "2025-04-02T00:00:00.000Z",
+    "billingDocumentIsCancelled": true,
+    "billingDocumentType": "F2",
+    "cancelledBillingDocument": "",
+    "companyCode": "ABCD",
+    "creationDate": "2025-04-03T00:00:00.000Z",
+    "creationTime": {
+      "hours": 11,
+      "minutes": 31,
+      "seconds": 13
+    },
+    "fiscalYear": "2025",
+    "lastChangeDateTime": "2025-07-24T11:42:32.921Z",
+    "soldToParty": "320000083",
+    "totalNetAmount": "253.39",
+    "transactionCurrency": "INR"
+  }
+  --- row 4 ---
+  {
+    "accountingDocument": "9400000231",
+    "billingDocument": "90504230",
+    "billingDocumentDate": "2025-04-02T00:00:00.000Z",
+    "billingDocumentIsCancelled": true,
+    "billingDocumentType": "F2",
+    "cancelledBillingDocument": "",
+    "companyCode": "ABCD",
+    "creationDate": "2025-04-03T00:00:00.000Z",
+    "creationTime": {
+      "hours": 11,
+      "minutes": 31,
+      "seconds": 13
+    },
+    "fiscalYear": "2025",
+    "lastChangeDateTime": "2025-07-24T11:42:33.573Z",
+    "soldToParty": "320000083",
+    "totalNetAmount": "253.39",
+    "transactionCurrency": "INR"
+  }
+
+
+Table: billing_document_headers
+Columns: accountingDocument, billingDocument, billingDocumentDate, billingDocumentIsCancelled, billingDocumentType, cancelledBillingDocument, companyCode, creationDate, creationTime, fiscalYear, lastChangeDateTime, soldToParty, totalNetAmount, transactionCurrency
+Sample rows:
+  --- row 1 ---
+  {
+    "accountingDocument": "9400000249",
+    "billingDocument": "90504248",
+    "billingDocumentDate": "2025-04-02T00:00:00.000Z",
+    "billingDocumentIsCancelled": false,
+    "billingDocumentType": "F2",
+    "cancelledBillingDocument": "",
+    "companyCode": "ABCD",
+    "creationDate": "2025-04-03T00:00:00.000Z",
+    "creationTime": {
+      "hours": 11,
+      "minutes": 31,
+      "seconds": 13
+    },
+    "fiscalYear": "2025",
+    "lastChangeDateTime": "2025-04-03T11:31:37.331Z",
+    "soldToParty": "320000083",
+    "totalNetAmount": "216.1",
+    "transactionCurrency": "INR"
+  }
+  --- row 2 ---
+  {
+    "accountingDocument": "9400123662",
+    "billingDocument": "90628265",
+    "billingDocumentDate": "2025-04-30T00:00:00.000Z",
+    "billingDocumentIsCancelled": false,
+    "billingDocumentType": "F2",
+    "cancelledBillingDocument": "",
+    "companyCode": "ABCD",
+    "creationDate": "2025-05-09T00:00:00.000Z",
+    "creationTime": {
+      "hours": 7,
+      "minutes": 21,
+      "seconds": 19
+    },
+    "fiscalYear": "2025",
+    "lastChangeDateTime": "2025-05-09T07:21:26.332Z",
+    "soldToParty": "320000082",
+    "totalNetAmount": "245.9",
+    "transactionCurrency": "INR"
+  }
+  --- row 3 ---
+  {
+    "accountingDocument": "9400123663",
+    "billingDocument": "90628266",
+    "billingDocumentDate": "2025-04-30T00:00:00.000Z",
+    "billingDocumentIsCancelled": false,
+    "billingDocumentType": "F2",
+    "cancelledBillingDocument": "",
+    "companyCode": "ABCD",
+    "creationDate": "2025-05-09T00:00:00.000Z",
+    "creationTime": {
+      "hours": 7,
+      "minutes": 21,
+      "seconds": 19
+    },
+    "fiscalYear": "2025",
+    "lastChangeDateTime": "2025-05-09T07:21:26.695Z",
+    "soldToParty": "320000082",
+    "totalNetAmount": "287.9",
+    "transactionCurrency": "INR"
+  }
+  --- row 4 ---
+  {
+    "accountingDocument": "9400000275",
+    "billingDocument": "90504274",
+    "billingDocumentDate": "2025-04-02T00:00:00.000Z",
+    "billingDocumentIsCancelled": true,
+    "billingDocumentType": "F2",
+    "cancelledBillingDocument": "",
+    "companyCode": "ABCD",
+    "creationDate": "2025-04-03T00:00:00.000Z",
+    "creationTime": {
+      "hours": 11,
+      "minutes": 31,
+      "seconds": 13
+    },
+    "fiscalYear": "2025",
+    "lastChangeDateTime": "2025-07-24T11:42:30.485Z",
+    "soldToParty": "320000083",
+    "totalNetAmount": "253.39",
+    "transactionCurrency": "INR"
+  }
+
+
+Table: billing_document_items
+Columns: billingDocument, billingDocumentItem, billingQuantity, billingQuantityUnit, material, netAmount, referenceSdDocument, referenceSdDocumentItem, transactionCurrency
+Sample rows:
+  --- row 1 ---
+  {
+    "billingDocument": "90504298",
+    "billingDocumentItem": "10",
+    "billingQuantity": "1",
+    "billingQuantityUnit": "PC",
+    "material": "B8907367041603",
+    "netAmount": "533.05",
+    "referenceSdDocument": "80738109",
+    "referenceSdDocumentItem": "10",
+    "transactionCurrency": "INR"
+  }
+  --- row 2 ---
+  {
+    "billingDocument": "90678703",
+    "billingDocumentItem": "10",
+    "billingQuantity": "1",
+    "billingQuantityUnit": "PC",
+    "material": "B8907367032571",
+    "netAmount": "305.9",
+    "referenceSdDocument": "80754606",
+    "referenceSdDocumentItem": "10",
+    "transactionCurrency": "INR"
+  }
+  --- row 3 ---
+  {
+    "billingDocument": "90678698",
+    "billingDocumentItem": "10",
+    "billingQuantity": "1",
+    "billingQuantityUnit": "PC",
+    "material": "B8907367022152",
+    "netAmount": "382.9",
+    "referenceSdDocument": "80754601",
+    "referenceSdDocumentItem": "10",
+    "transactionCurrency": "INR"
+  }
+  --- row 4 ---
+  {
+    "billingDocument": "90504301",
+    "billingDocumentItem": "10",
+    "billingQuantity": "1",
+    "billingQuantityUnit": "PC",
+    "material": "B8907367039570",
+    "netAmount": "1091.53",
+    "referenceSdDocument": "80738111",
+    "referenceSdDocumentItem": "10",
+    "transactionCurrency": "INR"
+  }
+
+
+Table: business_partner_addresses
+Columns: addressId, addressTimeZone, addressUuid, businessPartner, cityName, country, poBox, poBoxDeviatingCityName, poBoxDeviatingCountry, poBoxDeviatingRegion, poBoxIsWithoutNumber, poBoxLobbyName, poBoxPostalCode, postalCode, region, streetName, taxJurisdiction, transportZone, validityEndDate, validityStartDate
+Sample rows:
+  --- row 1 ---
+  {
+    "addressId": "4605",
+    "addressTimeZone": "INDIA",
+    "addressUuid": "af79c9a3-05bf-1ede-bef9-0812e7757c0e",
+    "businessPartner": "310000108",
+    "cityName": "Lake Christopher",
+    "country": "IN",
+    "poBox": "",
+    "poBoxDeviatingCityName": "",
+    "poBoxDeviatingCountry": "",
+    "poBoxDeviatingRegion": "",
+    "poBoxIsWithoutNumber": false,
+    "poBoxLobbyName": "",
+    "poBoxPostalCode": "",
+    "postalCode": "18589",
+    "region": "TS",
+    "streetName": "0171 Rebecca Glen",
+    "taxJurisdiction": "",
+    "transportZone": "",
+    "validityEndDate": "9999-12-31T23:59:59.000Z",
+    "validityStartDate": "2024-04-16T00:00:00.000Z"
+  }
+  --- row 2 ---
+  {
+    "addressId": "4607",
+    "addressTimeZone": "INDIA",
+    "addressUuid": "af79c9a3-05bf-1ede-bef9-0812e7773c0e",
+    "businessPartner": "310000109",
+    "cityName": "",
+    "country": "IN",
+    "poBox": "",
+    "poBoxDeviatingCityName": "",
+    "poBoxDeviatingCountry": "",
+    "poBoxDeviatingRegion": "",
+    "poBoxIsWithoutNumber": false,
+    "poBoxLobbyName": "",
+    "poBoxPostalCode": "",
+    "postalCode": "67176",
+    "region": "RJ",
+    "streetName": "174 Rebekah Mission Apt. 044",
+    "taxJurisdiction": "",
+    "transportZone": "",
+    "validityEndDate": "9999-12-31T23:59:59.000Z",
+    "validityStartDate": "2024-04-16T00:00:00.000Z"
+  }
+  --- row 3 ---
+  {
+    "addressId": "9526",
+    "addressTimeZone": "INDIA",
+    "addressUuid": "f5c943a9-5d10-1eef-a9e2-b69c310f3c5c",
+    "businessPartner": "320000082",
+    "cityName": "",
+    "country": "IN",
+    "poBox": "",
+    "poBoxDeviatingCityName": "",
+    "poBoxDeviatingCountry": "",
+    "poBoxDeviatingRegion": "",
+    "poBoxIsWithoutNumber": false,
+    "poBoxLobbyName": "",
+    "poBoxPostalCode": "",
+    "postalCode": "",
+    "region": "RJ",
+    "streetName": "",
+    "taxJurisdiction": "",
+    "transportZone": "",
+    "validityEndDate": "9999-12-31T23:59:59.000Z",
+    "validityStartDate": "2024-11-20T00:00:00.000Z"
+  }
+  --- row 4 ---
+  {
+    "addressId": "9548",
+    "addressTimeZone": "INDIA",
+    "addressUuid": "f5c943a9-5d10-1eef-a9e2-b69c310fbc5c",
+    "businessPartner": "320000083",
+    "cityName": "West Larry",
+    "country": "IN",
+    "poBox": "",
+    "poBoxDeviatingCityName": "",
+    "poBoxDeviatingCountry": "",
+    "poBoxDeviatingRegion": "",
+    "poBoxIsWithoutNumber": false,
+    "poBoxLobbyName": "",
+    "poBoxPostalCode": "",
+    "postalCode": "50278",
+    "region": "WB",
+    "streetName": "",
+    "taxJurisdiction": "",
+    "transportZone": "",
+    "validityEndDate": "9999-12-31T23:59:59.000Z",
+    "validityStartDate": "2024-11-20T00:00:00.000Z"
+  }
+
+
+Table: business_partners
+Columns: businessPartner, businessPartnerCategory, businessPartnerFullName, businessPartnerGrouping, businessPartnerIsBlocked, businessPartnerName, correspondenceLanguage, createdByUser, creationDate, creationTime, customer, firstName, formOfAddress, industry, isMarkedForArchiving, lastChangeDate, lastName, organizationBpName1, organizationBpName2
+Sample rows:
+  --- row 1 ---
+  {
+    "businessPartner": "310000108",
+    "businessPartnerCategory": "2",
+    "businessPartnerFullName": "Cardenas, Parker and Avila",
+    "businessPartnerGrouping": "Y101",
+    "businessPartnerIsBlocked": false,
+    "businessPartnerName": "Cardenas, Parker and Avila",
+    "correspondenceLanguage": "",
+    "createdByUser": "USER750",
+    "creationDate": "2024-04-16T00:00:00.000Z",
+    "creationTime": {
+      "hours": 13,
+      "minutes": 36,
+      "seconds": 43
+    },
+    "customer": "310000108",
+    "firstName": "",
+    "formOfAddress": "0003",
+    "industry": "",
+    "isMarkedForArchiving": false,
+    "lastChangeDate": "2025-06-27T00:00:00.000Z",
+    "lastName": "",
+    "organizationBpName1": "Cardenas, Parker and Avila",
+    "organizationBpName2": ""
+  }
+  --- row 2 ---
+  {
+    "businessPartner": "310000109",
+    "businessPartnerCategory": "2",
+    "businessPartnerFullName": "Bradley-Kelley",
+    "businessPartnerGrouping": "Y101",
+    "businessPartnerIsBlocked": false,
+    "businessPartnerName": "Bradley-Kelley",
+    "correspondenceLanguage": "",
+    "createdByUser": "USER750",
+    "creationDate": "2024-04-16T00:00:00.000Z",
+    "creationTime": {
+      "hours": 13,
+      "minutes": 36,
+      "seconds": 43
+    },
+    "customer": "310000109",
+    "firstName": "",
+    "formOfAddress": "0003",
+    "industry": "",
+    "isMarkedForArchiving": false,
+    "lastChangeDate": "2025-11-06T00:00:00.000Z",
+    "lastName": "",
+    "organizationBpName1": "Bradley-Kelley",
+    "organizationBpName2": ""
+  }
+  --- row 3 ---
+  {
+    "businessPartner": "320000082",
+    "businessPartnerCategory": "2",
+    "businessPartnerFullName": "Nguyen-Davis",
+    "businessPartnerGrouping": "Y102",
+    "businessPartnerIsBlocked": true,
+    "businessPartnerName": "Nguyen-Davis",
+    "correspondenceLanguage": "",
+    "createdByUser": "USER108",
+    "creationDate": "2024-11-20T00:00:00.000Z",
+    "creationTime": {
+      "hours": 13,
+      "minutes": 32,
+      "seconds": 1
+    },
+    "customer": "320000082",
+    "firstName": "",
+    "formOfAddress": "0003",
+    "industry": "",
+    "isMarkedForArchiving": true,
+    "lastChangeDate": "2025-09-10T00:00:00.000Z",
+    "lastName": "",
+    "organizationBpName1": "Nguyen-Davis",
+    "organizationBpName2": ""
+  }
+  --- row 4 ---
+  {
+    "businessPartner": "320000083",
+    "businessPartnerCategory": "2",
+    "businessPartnerFullName": "Nelson, Fitzpatrick and Jordan",
+    "businessPartnerGrouping": "Y102",
+    "businessPartnerIsBlocked": true,
+    "businessPartnerName": "Nelson, Fitzpatrick and Jordan",
+    "correspondenceLanguage": "",
+    "createdByUser": "USER108",
+    "creationDate": "2024-11-20T00:00:00.000Z",
+    "creationTime": {
+      "hours": 13,
+      "minutes": 32,
+      "seconds": 1
+    },
+    "customer": "320000083",
+    "firstName": "",
+    "formOfAddress": "0003",
+    "industry": "",
+    "isMarkedForArchiving": true,
+    "lastChangeDate": "2025-09-11T00:00:00.000Z",
+    "lastName": "",
+    "organizationBpName1": "Torres-Williams",
+    "organizationBpName2": "Torres-Williams"
+  }
+
+
+Table: customer_company_assignments
+Columns: accountingClerk, accountingClerkFaxNumber, accountingClerkInternetAddress, accountingClerkPhoneNumber, alternativePayerAccount, companyCode, customer, customerAccountGroup, deletionIndicator, paymentBlockingReason, paymentMethodsList, paymentTerms, reconciliationAccount
+Sample rows:
+  --- row 1 ---
+  {
+    "accountingClerk": "",
+    "accountingClerkFaxNumber": "",
+    "accountingClerkInternetAddress": "",
+    "accountingClerkPhoneNumber": "",
+    "alternativePayerAccount": "",
+    "companyCode": "ABCD",
+    "customer": "310000108",
+    "customerAccountGroup": "Y101",
+    "deletionIndicator": false,
+    "paymentBlockingReason": "",
+    "paymentMethodsList": "",
+    "paymentTerms": "",
+    "reconciliationAccount": "15500010"
+  }
+  --- row 2 ---
+  {
+    "accountingClerk": "",
+    "accountingClerkFaxNumber": "",
+    "accountingClerkInternetAddress": "",
+    "accountingClerkPhoneNumber": "",
+    "alternativePayerAccount": "",
+    "companyCode": "ABCD",
+    "customer": "310000109",
+    "customerAccountGroup": "Y101",
+    "deletionIndicator": false,
+    "paymentBlockingReason": "",
+    "paymentMethodsList": "",
+    "paymentTerms": "",
+    "reconciliationAccount": "15500010"
+  }
+  --- row 3 ---
+  {
+    "accountingClerk": "",
+    "accountingClerkFaxNumber": "",
+    "accountingClerkInternetAddress": "",
+    "accountingClerkPhoneNumber": "",
+    "alternativePayerAccount": "",
+    "companyCode": "ABCD",
+    "customer": "320000082",
+    "customerAccountGroup": "Y102",
+    "deletionIndicator": true,
+    "paymentBlockingReason": "",
+    "paymentMethodsList": "",
+    "paymentTerms": "",
+    "reconciliationAccount": "15500020"
+  }
+  --- row 4 ---
+  {
+    "accountingClerk": "",
+    "accountingClerkFaxNumber": "",
+    "accountingClerkInternetAddress": "",
+    "accountingClerkPhoneNumber": "",
+    "alternativePayerAccount": "",
+    "companyCode": "ABCD",
+    "customer": "320000083",
+    "customerAccountGroup": "Y102",
+    "deletionIndicator": true,
+    "paymentBlockingReason": "",
+    "paymentMethodsList": "",
+    "paymentTerms": "",
+    "reconciliationAccount": "15500020"
+  }
+
+
+Table: customer_sales_area_assignments
+Columns: billingIsBlockedForCustomer, completeDeliveryIsDefined, creditControlArea, currency, customer, customerPaymentTerms, deliveryPriority, distributionChannel, division, exchangeRateType, incotermsClassification, incotermsLocation1, salesDistrict, salesGroup, salesOffice, salesOrganization, shippingCondition, slsUnlmtdOvrdelivIsAllwd, supplyingPlant
+Sample rows:
+  --- row 1 ---
+  {
+    "billingIsBlockedForCustomer": "",
+    "completeDeliveryIsDefined": false,
+    "creditControlArea": "",
+    "currency": "INR",
+    "customer": "310000108",
+    "customerPaymentTerms": "Z009",
+    "deliveryPriority": "0",
+    "distributionChannel": "05",
+    "division": "99",
+    "exchangeRateType": "M",
+    "incotermsClassification": "FOR",
+    "incotermsLocation1": "Millerborough",
+    "salesDistrict": "",
+    "salesGroup": "",
+    "salesOffice": "",
+    "salesOrganization": "ABCD",
+    "shippingCondition": "01",
+    "slsUnlmtdOvrdelivIsAllwd": false,
+    "supplyingPlant": ""
+  }
+  --- row 2 ---
+  {
+    "billingIsBlockedForCustomer": "",
+    "completeDeliveryIsDefined": false,
+    "creditControlArea": "",
+    "currency": "INR",
+    "customer": "310000108",
+    "customerPaymentTerms": "Z001",
+    "deliveryPriority": "0",
+    "distributionChannel": "RB",
+    "division": "99",
+    "exchangeRateType": "",
+    "incotermsClassification": "FOR",
+    "incotermsLocation1": "Wellsborough",
+    "salesDistrict": "",
+    "salesGroup": "",
+    "salesOffice": "",
+    "salesOrganization": "ABCD",
+    "shippingCondition": "01",
+    "slsUnlmtdOvrdelivIsAllwd": false,
+    "supplyingPlant": ""
+  }
+  --- row 3 ---
+  {
+    "billingIsBlockedForCustomer": "",
+    "completeDeliveryIsDefined": false,
+    "creditControlArea": "",
+    "currency": "INR",
+    "customer": "310000109",
+    "customerPaymentTerms": "Z009",
+    "deliveryPriority": "0",
+    "distributionChannel": "05",
+    "division": "99",
+    "exchangeRateType": "M",
+    "incotermsClassification": "FOR",
+    "incotermsLocation1": "Millerborough",
+    "salesDistrict": "",
+    "salesGroup": "",
+    "salesOffice": "",
+    "salesOrganization": "ABCD",
+    "shippingCondition": "01",
+    "slsUnlmtdOvrdelivIsAllwd": false,
+    "supplyingPlant": ""
+  }
+  --- row 4 ---
+  {
+    "billingIsBlockedForCustomer": "",
+    "completeDeliveryIsDefined": false,
+    "creditControlArea": "",
+    "currency": "INR",
+    "customer": "310000109",
+    "customerPaymentTerms": "Z001",
+    "deliveryPriority": "0",
+    "distributionChannel": "RB",
+    "division": "99",
+    "exchangeRateType": "",
+    "incotermsClassification": "FOR",
+    "incotermsLocation1": "Wellsborough",
+    "salesDistrict": "",
+    "salesGroup": "",
+    "salesOffice": "",
+    "salesOrganization": "ABCD",
+    "shippingCondition": "01",
+    "slsUnlmtdOvrdelivIsAllwd": false,
+    "supplyingPlant": ""
+  }
+
+
+Table: journal_entry_items_accounts_receivable
+Columns: accountingDocument, accountingDocumentItem, accountingDocumentType, amountInCompanyCodeCurrency, amountInTransactionCurrency, assignmentReference, clearingAccountingDocument, clearingDate, clearingDocFiscalYear, companyCode, companyCodeCurrency, costCenter, customer, documentDate, financialAccountType, fiscalYear, glAccount, lastChangeDateTime, postingDate, profitCenter, referenceDocument, transactionCurrency
+Sample rows:
+  --- row 1 ---
+  {
+    "accountingDocument": "9400000220",
+    "accountingDocumentItem": "1",
+    "accountingDocumentType": "RV",
+    "amountInCompanyCodeCurrency": "897.03",
+    "amountInTransactionCurrency": "897.03",
+    "assignmentReference": "",
+    "clearingAccountingDocument": "9400635977",
+    "clearingDate": "2025-04-02T00:00:00.000Z",
+    "clearingDocFiscalYear": "2025",
+    "companyCode": "ABCD",
+    "companyCodeCurrency": "INR",
+    "costCenter": "",
+    "customer": "320000083",
+    "documentDate": "2025-04-02T00:00:00.000Z",
+    "financialAccountType": "D",
+    "fiscalYear": "2025",
+    "glAccount": "15500020",
+    "lastChangeDateTime": "2025-07-24T11:43:59.000Z",
+    "postingDate": "2025-04-02T00:00:00.000Z",
+    "profitCenter": "ABC001",
+    "referenceDocument": "90504219",
+    "transactionCurrency": "INR"
+  }
+  --- row 2 ---
+  {
+    "accountingDocument": "9400000226",
+    "accountingDocumentItem": "1",
+    "accountingDocumentType": "RV",
+    "amountInCompanyCodeCurrency": "897",
+    "amountInTransactionCurrency": "897",
+    "assignmentReference": "",
+    "clearingAccountingDocument": "9400635973",
+    "clearingDate": "2025-04-02T00:00:00.000Z",
+    "clearingDocFiscalYear": "2025",
+    "companyCode": "ABCD",
+    "companyCodeCurrency": "INR",
+    "costCenter": "",
+    "customer": "320000083",
+    "documentDate": "2025-04-02T00:00:00.000Z",
+    "financialAccountType": "D",
+    "fiscalYear": "2025",
+    "glAccount": "15500020",
+    "lastChangeDateTime": "2025-07-24T11:43:59.000Z",
+    "postingDate": "2025-04-02T00:00:00.000Z",
+    "profitCenter": "ABC001",
+    "referenceDocument": "90504225",
+    "transactionCurrency": "INR"
+  }
+  --- row 3 ---
+  {
+    "accountingDocument": "9400000231",
+    "accountingDocumentItem": "1",
+    "accountingDocumentType": "RV",
+    "amountInCompanyCodeCurrency": "897.03",
+    "amountInTransactionCurrency": "897.03",
+    "assignmentReference": "",
+    "clearingAccountingDocument": "9400635969",
+    "clearingDate": "2025-04-02T00:00:00.000Z",
+    "clearingDocFiscalYear": "2025",
+    "companyCode": "ABCD",
+    "companyCodeCurrency": "INR",
+    "costCenter": "",
+    "customer": "320000083",
+    "documentDate": "2025-04-02T00:00:00.000Z",
+    "financialAccountType": "D",
+    "fiscalYear": "2025",
+    "glAccount": "15500020",
+    "lastChangeDateTime": "2025-07-24T11:43:59.000Z",
+    "postingDate": "2025-04-02T00:00:00.000Z",
+    "profitCenter": "ABC001",
+    "referenceDocument": "90504230",
+    "transactionCurrency": "INR"
+  }
+  --- row 4 ---
+  {
+    "accountingDocument": "9400000238",
+    "accountingDocumentItem": "1",
+    "accountingDocumentType": "RV",
+    "amountInCompanyCodeCurrency": "597",
+    "amountInTransactionCurrency": "597",
+    "assignmentReference": "",
+    "clearingAccountingDocument": "9400635964",
+    "clearingDate": "2025-04-02T00:00:00.000Z",
+    "clearingDocFiscalYear": "2025",
+    "companyCode": "ABCD",
+    "companyCodeCurrency": "INR",
+    "costCenter": "",
+    "customer": "320000083",
+    "documentDate": "2025-04-02T00:00:00.000Z",
+    "financialAccountType": "D",
+    "fiscalYear": "2025",
+    "glAccount": "15500020",
+    "lastChangeDateTime": "2025-07-24T11:43:59.000Z",
+    "postingDate": "2025-04-02T00:00:00.000Z",
+    "profitCenter": "ABC001",
+    "referenceDocument": "90504237",
+    "transactionCurrency": "INR"
+  }
+
+
+Table: outbound_delivery_headers
+Columns: actualGoodsMovementDate, actualGoodsMovementTime, creationDate, creationTime, deliveryBlockReason, deliveryDocument, hdrGeneralIncompletionStatus, headerBillingBlockReason, lastChangeDate, overallGoodsMovementStatus, overallPickingStatus, overallProofOfDeliveryStatus, shippingPoint
+Sample rows:
+  --- row 1 ---
+  {
+    "actualGoodsMovementDate": null,
+    "actualGoodsMovementTime": {
+      "hours": 0,
+      "minutes": 0,
+      "seconds": 0
+    },
+    "creationDate": "2025-03-31T00:00:00.000Z",
+    "creationTime": {
+      "hours": 6,
+      "minutes": 49,
+      "seconds": 13
+    },
+    "deliveryBlockReason": "",
+    "deliveryDocument": "80737721",
+    "hdrGeneralIncompletionStatus": "C",
+    "headerBillingBlockReason": "",
+    "lastChangeDate": null,
+    "overallGoodsMovementStatus": "A",
+    "overallPickingStatus": "C",
+    "overallProofOfDeliveryStatus": "",
+    "shippingPoint": "1920"
+  }
+  --- row 2 ---
+  {
+    "actualGoodsMovementDate": null,
+    "actualGoodsMovementTime": {
+      "hours": 0,
+      "minutes": 0,
+      "seconds": 0
+    },
+    "creationDate": "2025-03-31T00:00:00.000Z",
+    "creationTime": {
+      "hours": 6,
+      "minutes": 49,
+      "seconds": 16
+    },
+    "deliveryBlockReason": "",
+    "deliveryDocument": "80737722",
+    "hdrGeneralIncompletionStatus": "C",
+    "headerBillingBlockReason": "",
+    "lastChangeDate": null,
+    "overallGoodsMovementStatus": "A",
+    "overallPickingStatus": "C",
+    "overallProofOfDeliveryStatus": "",
+    "shippingPoint": "1920"
+  }
+  --- row 3 ---
+  {
+    "actualGoodsMovementDate": null,
+    "actualGoodsMovementTime": {
+      "hours": 0,
+      "minutes": 0,
+      "seconds": 0
+    },
+    "creationDate": "2025-03-31T00:00:00.000Z",
+    "creationTime": {
+      "hours": 11,
+      "minutes": 19,
+      "seconds": 3
+    },
+    "deliveryBlockReason": "",
+    "deliveryDocument": "80737723",
+    "hdrGeneralIncompletionStatus": "C",
+    "headerBillingBlockReason": "",
+    "lastChangeDate": null,
+    "overallGoodsMovementStatus": "A",
+    "overallPickingStatus": "C",
+    "overallProofOfDeliveryStatus": "",
+    "shippingPoint": "1920"
+  }
+  --- row 4 ---
+  {
+    "actualGoodsMovementDate": null,
+    "actualGoodsMovementTime": {
+      "hours": 0,
+      "minutes": 0,
+      "seconds": 0
+    },
+    "creationDate": "2025-04-02T00:00:00.000Z",
+    "creationTime": {
+      "hours": 5,
+      "minutes": 1,
+      "seconds": 59
+    },
+    "deliveryBlockReason": "",
+    "deliveryDocument": "80737921",
+    "hdrGeneralIncompletionStatus": "C",
+    "headerBillingBlockReason": "",
+    "lastChangeDate": "2025-07-24T00:00:00.000Z",
+    "overallGoodsMovementStatus": "A",
+    "overallPickingStatus": "C",
+    "overallProofOfDeliveryStatus": "",
+    "shippingPoint": "KA05"
+  }
+
+
+Table: outbound_delivery_items
+Columns: actualDeliveryQuantity, batch, deliveryDocument, deliveryDocumentItem, deliveryQuantityUnit, itemBillingBlockReason, lastChangeDate, plant, referenceSdDocument, referenceSdDocumentItem, storageLocation
+Sample rows:
+  --- row 1 ---
+  {
+    "actualDeliveryQuantity": "1",
+    "batch": "",
+    "deliveryDocument": "80738076",
+    "deliveryDocumentItem": "000010",
+    "deliveryQuantityUnit": "PC",
+    "itemBillingBlockReason": "",
+    "lastChangeDate": null,
+    "plant": "WB05",
+    "referenceSdDocument": "740556",
+    "referenceSdDocumentItem": "000010",
+    "storageLocation": "5031"
+  }
+  --- row 2 ---
+  {
+    "actualDeliveryQuantity": "1",
+    "batch": "ABCD",
+    "deliveryDocument": "80738076",
+    "deliveryDocumentItem": "000020",
+    "deliveryQuantityUnit": "PC",
+    "itemBillingBlockReason": "",
+    "lastChangeDate": null,
+    "plant": "WB05",
+    "referenceSdDocument": "740556",
+    "referenceSdDocumentItem": "000020",
+    "storageLocation": "5031"
+  }
+  --- row 3 ---
+  {
+    "actualDeliveryQuantity": "1",
+    "batch": "ABCD",
+    "deliveryDocument": "80738076",
+    "deliveryDocumentItem": "000030",
+    "deliveryQuantityUnit": "PC",
+    "itemBillingBlockReason": "",
+    "lastChangeDate": null,
+    "plant": "WB05",
+    "referenceSdDocument": "740556",
+    "referenceSdDocumentItem": "000030",
+    "storageLocation": "5031"
+  }
+  --- row 4 ---
+  {
+    "actualDeliveryQuantity": "1",
+    "batch": "ABCD",
+    "deliveryDocument": "80738076",
+    "deliveryDocumentItem": "000040",
+    "deliveryQuantityUnit": "PC",
+    "itemBillingBlockReason": "",
+    "lastChangeDate": null,
+    "plant": "WB05",
+    "referenceSdDocument": "740556",
+    "referenceSdDocumentItem": "000040",
+    "storageLocation": "5031"
+  }
+
+
+Table: payments_accounts_receivable
+Columns: accountingDocument, accountingDocumentItem, amountInCompanyCodeCurrency, amountInTransactionCurrency, assignmentReference, clearingAccountingDocument, clearingDate, clearingDocFiscalYear, companyCode, companyCodeCurrency, costCenter, customer, documentDate, financialAccountType, fiscalYear, glAccount, invoiceReference, invoiceReferenceFiscalYear, postingDate, profitCenter, salesDocument, salesDocumentItem, transactionCurrency
+Sample rows:
+  --- row 1 ---
+  {
+    "accountingDocument": "9400000220",
+    "accountingDocumentItem": "1",
+    "amountInCompanyCodeCurrency": "897.03",
+    "amountInTransactionCurrency": "897.03",
+    "assignmentReference": null,
+    "clearingAccountingDocument": "9400635977",
+    "clearingDate": "2025-04-02T00:00:00.000Z",
+    "clearingDocFiscalYear": "2025",
+    "companyCode": "ABCD",
+    "companyCodeCurrency": "INR",
+    "costCenter": null,
+    "customer": "320000083",
+    "documentDate": "2025-04-02T00:00:00.000Z",
+    "financialAccountType": "D",
+    "fiscalYear": "2025",
+    "glAccount": "15500020",
+    "invoiceReference": null,
+    "invoiceReferenceFiscalYear": null,
+    "postingDate": "2025-04-02T00:00:00.000Z",
+    "profitCenter": "ABC001",
+    "salesDocument": null,
+    "salesDocumentItem": null,
+    "transactionCurrency": "INR"
+  }
+  --- row 2 ---
+  {
+    "accountingDocument": "9400000226",
+    "accountingDocumentItem": "1",
+    "amountInCompanyCodeCurrency": "897",
+    "amountInTransactionCurrency": "897",
+    "assignmentReference": null,
+    "clearingAccountingDocument": "9400635973",
+    "clearingDate": "2025-04-02T00:00:00.000Z",
+    "clearingDocFiscalYear": "2025",
+    "companyCode": "ABCD",
+    "companyCodeCurrency": "INR",
+    "costCenter": null,
+    "customer": "320000083",
+    "documentDate": "2025-04-02T00:00:00.000Z",
+    "financialAccountType": "D",
+    "fiscalYear": "2025",
+    "glAccount": "15500020",
+    "invoiceReference": null,
+    "invoiceReferenceFiscalYear": null,
+    "postingDate": "2025-04-02T00:00:00.000Z",
+    "profitCenter": "ABC001",
+    "salesDocument": null,
+    "salesDocumentItem": null,
+    "transactionCurrency": "INR"
+  }
+  --- row 3 ---
+  {
+    "accountingDocument": "9400000231",
+    "accountingDocumentItem": "1",
+    "amountInCompanyCodeCurrency": "897.03",
+    "amountInTransactionCurrency": "897.03",
+    "assignmentReference": null,
+    "clearingAccountingDocument": "9400635969",
+    "clearingDate": "2025-04-02T00:00:00.000Z",
+    "clearingDocFiscalYear": "2025",
+    "companyCode": "ABCD",
+    "companyCodeCurrency": "INR",
+    "costCenter": null,
+    "customer": "320000083",
+    "documentDate": "2025-04-02T00:00:00.000Z",
+    "financialAccountType": "D",
+    "fiscalYear": "2025",
+    "glAccount": "15500020",
+    "invoiceReference": null,
+    "invoiceReferenceFiscalYear": null,
+    "postingDate": "2025-04-02T00:00:00.000Z",
+    "profitCenter": "ABC001",
+    "salesDocument": null,
+    "salesDocumentItem": null,
+    "transactionCurrency": "INR"
+  }
+  --- row 4 ---
+  {
+    "accountingDocument": "9400000238",
+    "accountingDocumentItem": "1",
+    "amountInCompanyCodeCurrency": "597",
+    "amountInTransactionCurrency": "597",
+    "assignmentReference": null,
+    "clearingAccountingDocument": "9400635964",
+    "clearingDate": "2025-04-02T00:00:00.000Z",
+    "clearingDocFiscalYear": "2025",
+    "companyCode": "ABCD",
+    "companyCodeCurrency": "INR",
+    "costCenter": null,
+    "customer": "320000083",
+    "documentDate": "2025-04-02T00:00:00.000Z",
+    "financialAccountType": "D",
+    "fiscalYear": "2025",
+    "glAccount": "15500020",
+    "invoiceReference": null,
+    "invoiceReferenceFiscalYear": null,
+    "postingDate": "2025-04-02T00:00:00.000Z",
+    "profitCenter": "ABC001",
+    "salesDocument": null,
+    "salesDocumentItem": null,
+    "transactionCurrency": "INR"
+  }
+
+
+Table: plants
+Columns: addressId, defaultPurchasingOrganization, distributionChannel, division, factoryCalendar, isMarkedForArchiving, language, plant, plantCategory, plantCustomer, plantName, plantSupplier, salesOrganization, valuationArea
+Sample rows:
+  --- row 1 ---
+  {
+    "addressId": "93",
+    "defaultPurchasingOrganization": "",
+    "distributionChannel": "80",
+    "division": "99",
+    "factoryCalendar": "IN",
+    "isMarkedForArchiving": false,
+    "language": "EN",
+    "plant": "1001",
+    "plantCategory": "",
+    "plantCustomer": "1001",
+    "plantName": "Lake Christopher Plant",
+    "plantSupplier": "1001",
+    "salesOrganization": "ABCD",
+    "valuationArea": "1001"
+  }
+  --- row 2 ---
+  {
+    "addressId": "94",
+    "defaultPurchasingOrganization": "",
+    "distributionChannel": "80",
+    "division": "99",
+    "factoryCalendar": "IN",
+    "isMarkedForArchiving": false,
+    "language": "EN",
+    "plant": "1002",
+    "plantCategory": "",
+    "plantCustomer": "1002",
+    "plantName": "Lake Erica Plant",
+    "plantSupplier": "1002",
+    "salesOrganization": "ABCD",
+    "valuationArea": "1002"
+  }
+  --- row 3 ---
+  {
+    "addressId": "95",
+    "defaultPurchasingOrganization": "",
+    "distributionChannel": "80",
+    "division": "99",
+    "factoryCalendar": "IN",
+    "isMarkedForArchiving": false,
+    "language": "EN",
+    "plant": "1003",
+    "plantCategory": "",
+    "plantCustomer": "1003",
+    "plantName": "North Timothybury Plant",
+    "plantSupplier": "1003",
+    "salesOrganization": "ABCD",
+    "valuationArea": "1003"
+  }
+  --- row 4 ---
+  {
+    "addressId": "96",
+    "defaultPurchasingOrganization": "",
+    "distributionChannel": "80",
+    "division": "99",
+    "factoryCalendar": "IN",
+    "isMarkedForArchiving": false,
+    "language": "EN",
+    "plant": "1005",
+    "plantCategory": "",
+    "plantCustomer": "1005",
+    "plantName": "Port Kevin Plant",
+    "plantSupplier": "1005",
+    "salesOrganization": "ABCD",
+    "valuationArea": "1005"
+  }
+
+
+Table: product_descriptions
+Columns: language, product, productDescription
+Sample rows:
+  --- row 1 ---
+  {
+    "language": "EN",
+    "product": "3001456",
+    "productDescription": "WB-CG CHARCOAL GANG"
+  }
+  --- row 2 ---
+  {
+    "language": "EN",
+    "product": "3001468",
+    "productDescription": "WB-GS CHARCOAL GANG 22.2X24X6.7CM"
+  }
+  --- row 3 ---
+  {
+    "language": "EN",
+    "product": "B8907367002246",
+    "productDescription": "THE CHARCOAL GANG"
+  }
+  --- row 4 ---
+  {
+    "language": "EN",
+    "product": "B8907367015697",
+    "productDescription": "LIP LIGHTENING COMBO"
+  }
+
+
+Table: product_plants
+Columns: availabilityCheckType, countryOfOrigin, fiscalYearVariant, mrpType, plant, product, productionInvtryManagedLoc, profitCenter, regionOfOrigin
+Sample rows:
+  --- row 1 ---
+  {
+    "availabilityCheckType": "NC",
+    "countryOfOrigin": "",
+    "fiscalYearVariant": "",
+    "mrpType": "ND",
+    "plant": "MP07",
+    "product": "S8907367010814",
+    "productionInvtryManagedLoc": "",
+    "profitCenter": "ABC001",
+    "regionOfOrigin": ""
+  }
+  --- row 2 ---
+  {
+    "availabilityCheckType": "NC",
+    "countryOfOrigin": "",
+    "fiscalYearVariant": "",
+    "mrpType": "ND",
+    "plant": "PB05",
+    "product": "S8907367010814",
+    "productionInvtryManagedLoc": "",
+    "profitCenter": "ABC001",
+    "regionOfOrigin": ""
+  }
+  --- row 3 ---
+  {
+    "availabilityCheckType": "NC",
+    "countryOfOrigin": "",
+    "fiscalYearVariant": "",
+    "mrpType": "ND",
+    "plant": "PB07",
+    "product": "S8907367010814",
+    "productionInvtryManagedLoc": "",
+    "profitCenter": "ABC001",
+    "regionOfOrigin": ""
+  }
+  --- row 4 ---
+  {
+    "availabilityCheckType": "NC",
+    "countryOfOrigin": "",
+    "fiscalYearVariant": "",
+    "mrpType": "ND",
+    "plant": "RJ07",
+    "product": "S8907367010814",
+    "productionInvtryManagedLoc": "",
+    "profitCenter": "ABC001",
+    "regionOfOrigin": ""
+  }
+
+
+Table: product_storage_locations
+Columns: dateOfLastPostedCntUnRstrcdStk, physicalInventoryBlockInd, plant, product, storageLocation
+Sample rows:
+  --- row 1 ---
+  {
+    "dateOfLastPostedCntUnRstrcdStk": null,
+    "physicalInventoryBlockInd": "",
+    "plant": "HR05",
+    "product": "B8907367022152",
+    "storageLocation": "5066"
+  }
+  --- row 2 ---
+  {
+    "dateOfLastPostedCntUnRstrcdStk": null,
+    "physicalInventoryBlockInd": "",
+    "plant": "HR05",
+    "product": "B8907367022152",
+    "storageLocation": "5067"
+  }
+  --- row 3 ---
+  {
+    "dateOfLastPostedCntUnRstrcdStk": null,
+    "physicalInventoryBlockInd": "",
+    "plant": "HR05",
+    "product": "B8907367022152",
+    "storageLocation": "5075"
+  }
+  --- row 4 ---
+  {
+    "dateOfLastPostedCntUnRstrcdStk": null,
+    "physicalInventoryBlockInd": "",
+    "plant": "HR05",
+    "product": "B8907367022152",
+    "storageLocation": "5088"
+  }
+
+
+Table: products
+Columns: baseUnit, createdByUser, creationDate, crossPlantStatus, crossPlantStatusValidityDate, division, grossWeight, industrySector, isMarkedForDeletion, lastChangeDate, lastChangeDateTime, netWeight, product, productGroup, productOldId, productType, weightUnit
+Sample rows:
+  --- row 1 ---
+  {
+    "baseUnit": "PC",
+    "createdByUser": "USER108",
+    "creationDate": "2024-11-26T00:00:00.000Z",
+    "crossPlantStatus": "",
+    "crossPlantStatusValidityDate": null,
+    "division": "02",
+    "grossWeight": "0.012",
+    "industrySector": "M",
+    "isMarkedForDeletion": false,
+    "lastChangeDate": "2025-09-18T00:00:00.000Z",
+    "lastChangeDateTime": "2025-09-18T11:51:26.000Z",
+    "netWeight": "0.01",
+    "product": "3001456",
+    "productGroup": "ZPKG004",
+    "productOldId": "WD-BOX-CG",
+    "productType": "ZPKG",
+    "weightUnit": "KG"
+  }
+  --- row 2 ---
+  {
+    "baseUnit": "PC",
+    "createdByUser": "USER108",
+    "creationDate": "2024-11-26T00:00:00.000Z",
+    "crossPlantStatus": "",
+    "crossPlantStatusValidityDate": null,
+    "division": "02",
+    "grossWeight": "0.012",
+    "industrySector": "M",
+    "isMarkedForDeletion": false,
+    "lastChangeDate": "2025-09-25T00:00:00.000Z",
+    "lastChangeDateTime": "2025-09-25T11:59:36.000Z",
+    "netWeight": "0.01",
+    "product": "3001468",
+    "productGroup": "ZPKG004",
+    "productOldId": "GS-CG",
+    "productType": "ZPKG",
+    "weightUnit": "KG"
+  }
+  --- row 3 ---
+  {
+    "baseUnit": "PC",
+    "createdByUser": "USER108",
+    "creationDate": "2024-12-12T00:00:00.000Z",
+    "crossPlantStatus": "",
+    "crossPlantStatusValidityDate": null,
+    "division": "01",
+    "grossWeight": "0.11",
+    "industrySector": "M",
+    "isMarkedForDeletion": false,
+    "lastChangeDate": "2025-09-16T00:00:00.000Z",
+    "lastChangeDateTime": "2025-09-16T13:12:08.000Z",
+    "netWeight": "0.1",
+    "product": "B8907367002246",
+    "productGroup": "ZFG1001",
+    "productOldId": "ABC-WEB-225",
+    "productType": "ZF01",
+    "weightUnit": "KG"
+  }
+  --- row 4 ---
+  {
+    "baseUnit": "PC",
+    "createdByUser": "USER108",
+    "creationDate": "2024-12-12T00:00:00.000Z",
+    "crossPlantStatus": "",
+    "crossPlantStatusValidityDate": null,
+    "division": "01",
+    "grossWeight": "0.11",
+    "industrySector": "M",
+    "isMarkedForDeletion": false,
+    "lastChangeDate": "2025-09-18T00:00:00.000Z",
+    "lastChangeDateTime": "2025-09-18T11:49:37.000Z",
+    "netWeight": "0.1",
+    "product": "B8907367015697",
+    "productGroup": "ZFG1001",
+    "productOldId": "ABC-WEB-1186",
+    "productType": "ZF01",
+    "weightUnit": "KG"
+  }
+
+
+Table: sales_order_headers
+Columns: createdByUser, creationDate, customerPaymentTerms, deliveryBlockReason, distributionChannel, headerBillingBlockReason, incotermsClassification, incotermsLocation1, lastChangeDateTime, organizationDivision, overallDeliveryStatus, overallOrdReltdBillgStatus, overallSdDocReferenceStatus, pricingDate, requestedDeliveryDate, salesGroup, salesOffice, salesOrder, salesOrderType, salesOrganization, soldToParty, totalCreditCheckStatus, totalNetAmount, transactionCurrency
+Sample rows:
+  --- row 1 ---
+  {
+    "createdByUser": "USER786",
+    "creationDate": "2025-03-31T00:00:00.000Z",
+    "customerPaymentTerms": "Z009",
+    "deliveryBlockReason": "",
+    "distributionChannel": "05",
+    "headerBillingBlockReason": "",
+    "incotermsClassification": "FOR",
+    "incotermsLocation1": "Millerborough",
+    "lastChangeDateTime": "2025-03-31T06:42:38.786Z",
+    "organizationDivision": "99",
+    "overallDeliveryStatus": "C",
+    "overallOrdReltdBillgStatus": "",
+    "overallSdDocReferenceStatus": "",
+    "pricingDate": "2025-03-31T00:00:00.000Z",
+    "requestedDeliveryDate": "2025-03-31T00:00:00.000Z",
+    "salesGroup": "",
+    "salesOffice": "",
+    "salesOrder": "740506",
+    "salesOrderType": "OR",
+    "salesOrganization": "ABCD",
+    "soldToParty": "310000108",
+    "totalCreditCheckStatus": "",
+    "totalNetAmount": "17108.25",
+    "transactionCurrency": "INR"
+  }
+  --- row 2 ---
+  {
+    "createdByUser": "USER786",
+    "creationDate": "2025-03-31T00:00:00.000Z",
+    "customerPaymentTerms": "Z009",
+    "deliveryBlockReason": "",
+    "distributionChannel": "05",
+    "headerBillingBlockReason": "",
+    "incotermsClassification": "FOR",
+    "incotermsLocation1": "Millerborough",
+    "lastChangeDateTime": "2025-03-31T06:44:15.356Z",
+    "organizationDivision": "99",
+    "overallDeliveryStatus": "C",
+    "overallOrdReltdBillgStatus": "",
+    "overallSdDocReferenceStatus": "",
+    "pricingDate": "2025-03-31T00:00:00.000Z",
+    "requestedDeliveryDate": "2025-03-31T00:00:00.000Z",
+    "salesGroup": "",
+    "salesOffice": "",
+    "salesOrder": "740507",
+    "salesOrderType": "OR",
+    "salesOrganization": "ABCD",
+    "soldToParty": "310000109",
+    "totalCreditCheckStatus": "",
+    "totalNetAmount": "19021.27",
+    "transactionCurrency": "INR"
+  }
+  --- row 3 ---
+  {
+    "createdByUser": "USER786",
+    "creationDate": "2025-03-31T00:00:00.000Z",
+    "customerPaymentTerms": "Z009",
+    "deliveryBlockReason": "",
+    "distributionChannel": "05",
+    "headerBillingBlockReason": "",
+    "incotermsClassification": "FOR",
+    "incotermsLocation1": "Millerborough",
+    "lastChangeDateTime": "2025-03-31T11:07:27.454Z",
+    "organizationDivision": "99",
+    "overallDeliveryStatus": "C",
+    "overallOrdReltdBillgStatus": "",
+    "overallSdDocReferenceStatus": "",
+    "pricingDate": "2025-03-31T00:00:00.000Z",
+    "requestedDeliveryDate": "2025-03-31T00:00:00.000Z",
+    "salesGroup": "",
+    "salesOffice": "",
+    "salesOrder": "740508",
+    "salesOrderType": "OR",
+    "salesOrganization": "ABCD",
+    "soldToParty": "310000109",
+    "totalCreditCheckStatus": "",
+    "totalNetAmount": "883.88",
+    "transactionCurrency": "INR"
+  }
+  --- row 4 ---
+  {
+    "createdByUser": "USER737",
+    "creationDate": "2025-04-02T00:00:00.000Z",
+    "customerPaymentTerms": "Z001",
+    "deliveryBlockReason": "",
+    "distributionChannel": "11",
+    "headerBillingBlockReason": "",
+    "incotermsClassification": "FOR",
+    "incotermsLocation1": "Lake David",
+    "lastChangeDateTime": "2025-04-02T04:39:58.854Z",
+    "organizationDivision": "99",
+    "overallDeliveryStatus": "C",
+    "overallOrdReltdBillgStatus": "",
+    "overallSdDocReferenceStatus": "",
+    "pricingDate": "2025-04-02T00:00:00.000Z",
+    "requestedDeliveryDate": "2025-04-02T00:00:00.000Z",
+    "salesGroup": "",
+    "salesOffice": "",
+    "salesOrder": "740509",
+    "salesOrderType": "OR",
+    "salesOrganization": "ABCD",
+    "soldToParty": "320000083",
+    "totalCreditCheckStatus": "",
+    "totalNetAmount": "229.66",
+    "transactionCurrency": "INR"
+  }
+
+
+Table: sales_order_items
+Columns: itemBillingBlockReason, material, materialGroup, netAmount, productionPlant, requestedQuantity, requestedQuantityUnit, salesDocumentRjcnReason, salesOrder, salesOrderItem, salesOrderItemCategory, storageLocation, transactionCurrency
+Sample rows:
+  --- row 1 ---
+  {
+    "itemBillingBlockReason": "",
+    "material": "S8907367001003",
+    "materialGroup": "ZFG1001",
+    "netAmount": "9966.1",
+    "productionPlant": "1920",
+    "requestedQuantity": "48",
+    "requestedQuantityUnit": "PC",
+    "salesDocumentRjcnReason": "",
+    "salesOrder": "740506",
+    "salesOrderItem": "10",
+    "salesOrderItemCategory": "TAN",
+    "storageLocation": "V2S2",
+    "transactionCurrency": "INR"
+  }
+  --- row 2 ---
+  {
+    "itemBillingBlockReason": "",
+    "material": "S8907367000327",
+    "materialGroup": "ZFG1001",
+    "netAmount": "2366.95",
+    "productionPlant": "1920",
+    "requestedQuantity": "10",
+    "requestedQuantityUnit": "PC",
+    "salesDocumentRjcnReason": "",
+    "salesOrder": "740506",
+    "salesOrderItem": "20",
+    "salesOrderItemCategory": "TAN",
+    "storageLocation": "V2S2",
+    "transactionCurrency": "INR"
+  }
+  --- row 3 ---
+  {
+    "itemBillingBlockReason": "",
+    "material": "S8907367020073",
+    "materialGroup": "ZFG1001",
+    "netAmount": "1181.69",
+    "productionPlant": "1920",
+    "requestedQuantity": "8",
+    "requestedQuantityUnit": "PC",
+    "salesDocumentRjcnReason": "",
+    "salesOrder": "740506",
+    "salesOrderItem": "30",
+    "salesOrderItemCategory": "TAN",
+    "storageLocation": "V2S2",
+    "transactionCurrency": "INR"
+  }
+  --- row 4 ---
+  {
+    "itemBillingBlockReason": "",
+    "material": "S8907367025344",
+    "materialGroup": "ZFG1001",
+    "netAmount": "709.49",
+    "productionPlant": "1920",
+    "requestedQuantity": "4",
+    "requestedQuantityUnit": "PC",
+    "salesDocumentRjcnReason": "",
+    "salesOrder": "740506",
+    "salesOrderItem": "40",
+    "salesOrderItemCategory": "TAN",
+    "storageLocation": "V2S2",
+    "transactionCurrency": "INR"
+  }
+
+
+Table: sales_order_schedule_lines
+Columns: confdOrderQtyByMatlAvailCheck, confirmedDeliveryDate, orderQuantityUnit, salesOrder, salesOrderItem, scheduleLine
+Sample rows:
+  --- row 1 ---
+  {
+    "confdOrderQtyByMatlAvailCheck": "48",
+    "confirmedDeliveryDate": "2025-03-31T00:00:00.000Z",
+    "orderQuantityUnit": "PC",
+    "salesOrder": "740506",
+    "salesOrderItem": "10",
+    "scheduleLine": "1"
+  }
+  --- row 2 ---
+  {
+    "confdOrderQtyByMatlAvailCheck": "10",
+    "confirmedDeliveryDate": "2025-03-31T00:00:00.000Z",
+    "orderQuantityUnit": "PC",
+    "salesOrder": "740506",
+    "salesOrderItem": "20",
+    "scheduleLine": "1"
+  }
+  --- row 3 ---
+  {
+    "confdOrderQtyByMatlAvailCheck": "8",
+    "confirmedDeliveryDate": "2025-03-31T00:00:00.000Z",
+    "orderQuantityUnit": "PC",
+    "salesOrder": "740506",
+    "salesOrderItem": "30",
+    "scheduleLine": "1"
+  }
+  --- row 4 ---
+  {
+    "confdOrderQtyByMatlAvailCheck": "4",
+    "confirmedDeliveryDate": "2025-03-31T00:00:00.000Z",
+    "orderQuantityUnit": "PC",
+    "salesOrder": "740506",
+    "salesOrderItem": "40",
+    "scheduleLine": "1"
+  }
