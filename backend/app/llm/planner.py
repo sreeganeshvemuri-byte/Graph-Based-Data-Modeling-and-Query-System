@@ -179,6 +179,39 @@ def _gemini_generate_content(system_prompt: str, user_input: str, *, model: str)
     return data["candidates"][0]["content"]["parts"][0]["text"]
 
 
+
+
+def _rule_based_plan(user_input: str) -> dict[str, Any] | None:
+    """
+    Lightweight fallback for high-frequency prompts so users don't get false rejects.
+    """
+    text = user_input.strip().lower()
+
+    sales_order_match = re.search(r"sales\s*order\s*(?:id\s*)?(\d+)", text)
+    if sales_order_match and any(k in text for k in ["full journey", "full flow", "trace", "journey", "flow"]):
+        so_id = sales_order_match.group(1)
+        return {
+            "intent": "trace_flow",
+            "entity_type": "sales_order",
+            "entity_id": so_id,
+            "stages": ["sales_order", "schedule_lines", "delivery", "billing", "journal_entry", "payment"],
+            "filters": {"company_code": None, "fiscal_year": None, "include_cancelled": False},
+        }
+
+    billing_match = re.search(r"billing\s*(?:doc(?:ument)?|invoice)?\s*(\d+)", text)
+    if billing_match and any(k in text for k in ["full journey", "full flow", "trace", "journey", "flow"]):
+        billing_id = billing_match.group(1)
+        return {
+            "intent": "trace_flow",
+            "entity_type": "billing_document",
+            "entity_id": billing_id,
+            "stages": ["billing", "journal_entry", "payment"],
+            "filters": {"company_code": None, "fiscal_year": None, "include_cancelled": False},
+        }
+
+    return None
+
+
 def generate_query_plan(user_input: str) -> dict[str, Any]:
     """
     Generate a structured query plan by calling an LLM.
@@ -188,6 +221,10 @@ def generate_query_plan(user_input: str) -> dict[str, Any]:
     - Else if GEMINI_API_KEY is set, uses Gemini.
     - Else returns a reject plan describing the missing config.
     """
+    direct_plan = _rule_based_plan(user_input)
+    if direct_plan is not None:
+        return direct_plan
+
     system_prompt = _load_system_prompt()
 
     provider = "groq" if os.environ.get("GROQ_API_KEY") else "gemini" if os.environ.get("GEMINI_API_KEY") else None

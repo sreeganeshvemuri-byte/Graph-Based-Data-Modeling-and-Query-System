@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import GraphView from './components/GraphView'
 import ChatPanel from './components/ChatPanel'
 import './App.css'
