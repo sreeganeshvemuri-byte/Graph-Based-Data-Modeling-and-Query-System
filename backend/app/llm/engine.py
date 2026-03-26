@@ -26,35 +26,82 @@ load_dotenv(Path(__file__).resolve().parents[2] / ".env", override=False)
 # 1. LLM CALL (single function, model resolved once)
 # ─────────────────────────────────────────────────────────────────────────────
 
-GEMINI_MODEL = "gemini-2.5-flash-lite"   # confirmed working, high RPM free tier
+# Model cascade — tried in order, skips any that return 429
+# Each model has its own independent rate-limit pool on Gemini's free tier
+GEMINI_MODEL_CASCADE = [
+    "gemini-2.5-flash-lite",   # fastest, highest RPM
+    "gemini-2.0-flash-lite",   # separate pool
+    "gemma-3-27b-it",          # Gemma pool, completely independent
+    "gemma-3-4b-it",           # smaller Gemma, very high RPM
+    "gemini-2.0-flash",        # fallback flash
+]
 
 import time as _time
 
 class RateLimitError(Exception):
     pass
 
-def _call_llm(system: str, user: str, *, temperature: float = 0.0, max_tokens: int = 1024) -> str:
-    """Single LLM call. Gemini first, Groq fallback. Raises RateLimitError on 429."""
+def _call_gemini_model(model: str, system: str, user: str, temperature: float, max_tokens: int, key: str) -> str:
+    """Call one specific Gemini/Gemma model. Raises RateLimitError on 429.
+    
+    Gemma models (gemma-3-*) don't support systemInstruction — for those,
+    we prepend the system prompt to the user message instead.
+    """
     from urllib.error import HTTPError
-    gemini_key = os.environ.get("GEMINI_API_KEY")
-    groq_key   = os.environ.get("GROQ_API_KEY")
+    url = f"https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent?key={key}"
+    
+    is_gemma = model.startswith("gemma")
+    if is_gemma:
+        # Gemma: no systemInstruction, prepend to user turn
+        combined_user = system + "\n\n" + user
 
-    if gemini_key:
-        url = f"https://generativelanguage.googleapis.com/v1beta/models/{GEMINI_MODEL}:generateContent?key={gemini_key}"
+        payload = {
+            "contents": [{"role": "user", "parts": [{"text": combined_user}]}],
+            "generationConfig": {"temperature": temperature, "maxOutputTokens": max_tokens},
+        }
+    else:
         payload = {
             "systemInstruction": {"parts": [{"text": system}]},
             "contents": [{"role": "user", "parts": [{"text": user}]}],
             "generationConfig": {"temperature": temperature, "maxOutputTokens": max_tokens},
         }
-        req = urllib.request.Request(url, data=json.dumps(payload).encode(),
-                                     headers={"Content-Type": "application/json"}, method="POST")
-        try:
-            with urllib.request.urlopen(req, timeout=30) as r:
-                return json.loads(r.read())["candidates"][0]["content"]["parts"][0]["text"].strip()
-        except HTTPError as e:
-            if e.code == 429:
-                raise RateLimitError("Rate limited")
-            raise
+    
+    req = urllib.request.Request(url, data=json.dumps(payload).encode(),
+                                 headers={"Content-Type": "application/json"}, method="POST")
+    try:
+        with urllib.request.urlopen(req, timeout=30) as r:
+            return json.loads(r.read())["candidates"][0]["content"]["parts"][0]["text"].strip()
+    except HTTPError as e:
+        if e.code == 429:
+            raise RateLimitError(f"{model} rate limited")
+        raise
+
+def _call_llm(system: str, user: str, *, temperature: float = 0.0, max_tokens: int = 1024) -> str:
+    """
+    LLM call with model cascade.
+    Tries each Gemini/Gemma model in order — if one is 429, moves to the next.
+    Falls back to Groq if all Gemini models are rate-limited.
+    Raises RateLimitError only if ALL providers are exhausted.
+    """
+    from urllib.error import HTTPError
+    gemini_key = os.environ.get("GEMINI_API_KEY")
+    groq_key   = os.environ.get("GROQ_API_KEY")
+
+    # Override cascade from env (e.g. GEMINI_MODEL=gemma-3-27b-it to pin a model)
+    env_model = os.environ.get("GEMINI_MODEL")
+    models = [env_model] + [m for m in GEMINI_MODEL_CASCADE if m != env_model] if env_model else GEMINI_MODEL_CASCADE
+
+    if gemini_key:
+        last_err = None
+        for model in models:
+            try:
+                return _call_gemini_model(model, system, user, temperature, max_tokens, gemini_key)
+            except RateLimitError as e:
+                last_err = e
+                continue  # try next model
+            except Exception:
+                raise
+        # All Gemini models rate-limited — fall through to Groq or raise
 
     if groq_key:
         url = "https://api.groq.com/openai/v1/chat/completions"
@@ -71,10 +118,13 @@ def _call_llm(system: str, user: str, *, temperature: float = 0.0, max_tokens: i
                 return json.loads(r.read())["choices"][0]["message"]["content"].strip()
         except HTTPError as e:
             if e.code == 429:
-                raise RateLimitError("Rate limited")
+                raise RateLimitError("All providers rate limited. Please wait a moment.")
             raise
 
-    raise RuntimeError("No LLM provider. Set GEMINI_API_KEY or GROQ_API_KEY in backend/.env")
+    if not gemini_key and not groq_key:
+        raise RuntimeError("No LLM provider. Set GEMINI_API_KEY or GROQ_API_KEY in backend/.env")
+
+    raise RateLimitError("All models rate limited. Please wait a moment and try again.")
 
 
 # ─────────────────────────────────────────────────────────────────────────────
