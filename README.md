@@ -1,7 +1,7 @@
 # Graph-Based Data Modeling and Query System
 
 > **Forward-Deployed Engineer Take-Home Task — Dodge AI**
-> SAP Order-to-Cash context graph with LLM-powered natural language query interface, streaming responses, and interactive graph visualization.
+> SAP Order-to-Cash context graph with LLM-powered natural language queries, dynamic SQL generation, streaming responses, and interactive visualization.
 
 ---
 
@@ -11,17 +11,16 @@
 
 Full dataset loaded: 21,393 rows · 19 entity types · 4,164 graph edges · 466 visual nodes.
 
-**Suggested queries:**
+**Try these queries:**
 ```
 Show me the full journey for sales order 740509
-Trace the full flow of billing document 90504274
+Which customer has the highest net value order?
+All orders containing product S8907367010814
 Which products have the highest number of billing documents?
 Find all data quality and broken flow issues
-Identify sales orders with incomplete flows
-Look up customer 310000108
-Are there billing docs without journal entries?
-Show me delivered but not billed orders
-Find invoices with amount mismatches
+Summarise this dataset
+How many cancelled billing documents are there?
+Average order value per customer
 ```
 
 ---
@@ -29,31 +28,55 @@ Find invoices with amount mismatches
 ## Architecture
 
 ```
-┌──────────────────────────────────────────────────────────────┐
-│                    React + Vite Frontend                     │
-│  ┌─────────────────────────┐  ┌──────────────────────────┐  │
-│  │     GraphView.jsx        │  │      ChatPanel.jsx        │  │
-│  │  Cytoscape.js canvas     │  │  SSE stream consumer      │  │
-│  │  dot nodes, hover cards  │  │  NL answer word-by-word   │  │
-│  │  highlight + dim logic   │  │  plan badge, result table │  │
-│  └─────────────────────────┘  └──────────────────────────┘  │
-│                    App.jsx (state, routing)                   │
-└──────────────────────────┬───────────────────────────────────┘
-                           │ HTTP / Server-Sent Events
-┌──────────────────────────▼───────────────────────────────────┐
-│                   FastAPI Backend                             │
-│  GET  /api/graph/overview    — full graph JSON               │
-│  GET  /api/graph/stats       — node/edge counts              │
-│  POST /api/query             — sync plan + result            │
-│  POST /api/query/stream      — SSE: plan→result→tokens→done  │
-└──────────────────────────┬───────────────────────────────────┘
-                           │
-        ┌──────────────────┼──────────────────┐
-        ▼                  ▼                  ▼
-  planner.py          handlers.py         SQLite DB
-  Rule-based          4 intent            13 tables
-  (95% coverage)      SQL executors       + graph_edges
-  + Gemini fallback
+┌─────────────────────────────────────────────────────────────────┐
+│                     React + Vite Frontend                        │
+│  ┌──────────────────────────┐  ┌─────────────────────────────┐  │
+│  │      GraphView.jsx        │  │       ChatPanel.jsx          │  │
+│  │  Cytoscape.js dot graph   │  │  SSE stream consumer         │  │
+│  │  node tooltip on click    │  │  streaming NL answer         │  │
+│  │  highlight + dim + zoom   │  │  SQL result tables           │  │
+│  └──────────────────────────┘  └─────────────────────────────┘  │
+│                     App.jsx (state, graph data)                  │
+└───────────────────────────┬─────────────────────────────────────┘
+                            │  HTTP / Server-Sent Events
+┌───────────────────────────▼─────────────────────────────────────┐
+│                    FastAPI Backend (port 8000)                    │
+│  GET  /api/graph/overview  — full graph JSON                     │
+│  GET  /api/graph/stats     — node/edge counts                    │
+│  POST /api/query/stream    — SSE: plan → result → tokens → done  │
+└──────────────┬──────────────────────────┬────────────────────────┘
+               │                          │
+        rule_planner.py             engine.py
+        3 structural patterns       Dynamic SQL generation
+        (trace/top/broken)          Full schema as RAG context
+               │                    LLM → SQL → Execute → LLM answer
+               ▼                          │
+        handlers.py              SQLite (data/app.db)
+        Dedicated SQL            19 tables, 21K rows
+        for each type            + graph_edges
+```
+
+### Two-Path Query Engine
+
+**Path A — Structural (rule-based, no SQL gen needed):**
+Handles the 3 task-required query types detected by pattern matching:
+- `trace_flow` — multi-hop graph traversal
+- `top_products_by_billing` — aggregation query
+- `find_broken_flows` — 7 gap-analysis checks
+
+**Path B — Dynamic SQL (everything else):**
+```
+User question
+    ↓
+LLM reads full 19-table schema (RAG context)
+    ↓ 
+LLM outputs {queries: [{purpose, sql}]} JSON — 1-3 queries
+    ↓
+Execute safely (read-only, 100-row cap)
+    ↓
+LLM writes grounded NL answer from actual rows
+    ↓
+Stream word-by-word to user
 ```
 
 ---
@@ -61,40 +84,35 @@ Find invoices with amount mismatches
 ## Project Structure
 
 ```
-.
-├── backend/
-│   ├── app/
-│   │   ├── main.py                    # FastAPI app entry point
-│   │   ├── api/
-│   │   │   ├── router.py              # Registers all API routers
-│   │   │   ├── graph.py               # /graph/overview, /graph/stats
-│   │   │   ├── query.py               # /query (sync) + /query/stream (SSE)
-│   │   │   └── health.py              # /health
-│   │   ├── db/
-│   │   │   ├── base.py                # SQLAlchemy DeclarativeBase
-│   │   │   ├── models.py              # 13 ORM models + GraphEdge
-│   │   │   └── session.py             # Engine, SessionLocal, init_db()
-│   │   ├── ingestion/
-│   │   │   ├── cli.py                 # CLI: python -m app.ingestion.cli <path>
-│   │   │   ├── ingest_jsonl.py        # Parses all 19 JSONL entity types
-│   │   │   └── graph_builder.py       # Builds graph_edges from relational tables
-│   │   ├── llm/
-│   │   │   └── planner.py             # Rule-based + Gemini query plan generation
-│   │   └── query/
-│   │       ├── plans.py               # Pydantic models for 5 plan types
-│   │       ├── validation.py          # Strict schema validation layer
-│   │       ├── handlers.py            # SQL execution per intent
-│   │       └── execute.py             # Routes plan → correct handler
-│   ├── requirements.txt
-│   └── .env.example
-├── frontend/
-│   └── src/
-│       ├── App.jsx                    # Root: state, graph data, API calls
-│       ├── components/
-│       │   ├── GraphView.jsx          # Cytoscape graph, tooltip, highlighting
-│       │   └── ChatPanel.jsx          # SSE consumer, streaming chat UI
-│       └── main.jsx
-└── sap-order-to-cash-dataset/         # Source JSONL files
+backend/
+  app/
+    api/
+      graph.py          GET /graph/overview, /graph/stats
+      query.py          POST /query/stream (SSE) — path router
+      health.py
+      router.py
+    db/
+      models.py         13 SQLAlchemy ORM models + GraphEdge
+      session.py        SQLite engine, init_db(), get_db()
+      base.py
+    ingestion/
+      cli.py            python -m app.ingestion.cli <path> --build-edges
+      ingest_jsonl.py   Parses 19 JSONL entity types, upserts rows
+      graph_builder.py  Builds graph_edges from relational tables
+    llm/
+      engine.py         ★ Dynamic SQL engine — schema RAG, plan, execute, answer
+      rule_planner.py   ★ Rule-based detection for 3 structural query types
+    query/
+      plans.py          Pydantic models for structural plan types
+      validation.py     Schema validation layer
+      handlers.py       SQL execution for trace/top/broken
+      execute.py        Intent router
+
+frontend/src/
+  App.jsx               Root: graph state, overview fetch on mount
+  components/
+    GraphView.jsx       Cytoscape graph, tooltip, highlighting, edge toggle
+    ChatPanel.jsx       SSE consumer, streaming chat, SQL result tables
 ```
 
 ---
@@ -102,10 +120,11 @@ Find invoices with amount mismatches
 ## Local Setup
 
 ### Prerequisites
-- Python 3.11+, Node.js 18+, npm
-- Free API key: [Groq](https://console.groq.com) or [Google Gemini](https://ai.google.dev)
+- Python 3.11+, Node.js 18+
+- Free API key: [Google Gemini](https://ai.google.dev) (recommended) or [Groq](https://console.groq.com)
 
-### 1 — Install backend
+### 1 — Install
+
 ```bash
 git clone https://github.com/sreeganeshvemuri-byte/Graph-Based-Data-Modeling-and-Query-System.git
 cd Graph-Based-Data-Modeling-and-Query-System
@@ -114,147 +133,137 @@ python -m venv .venv && source .venv/bin/activate
 pip install fastapi "uvicorn[standard]" sqlalchemy pydantic python-dotenv
 ```
 
-### 2 — Configure API key
+### 2 — Configure
+
 ```bash
 cp backend/.env.example backend/.env
-# Edit backend/.env:
-GEMINI_API_KEY=AIzaSy...      # gemini-2.5-flash-lite (highest free RPM)
-# OR
-GROQ_API_KEY=gsk_...
+# Edit backend/.env and add:
+GEMINI_API_KEY=AIzaSy...    # gemini-2.5-flash-lite — free, 30 RPM
 ```
 
-> The system works fully without an API key. 95%+ of queries are handled by the rule-based planner with zero API calls. An API key only matters for unusual free-form phrasings and richer NL answers.
-
 ### 3 — Ingest dataset
+
 ```bash
 cd backend
 PYTHONPATH=. python -m app.ingestion.cli \
   ../sap-order-to-cash-dataset/sap-o2c-data \
   --build-edges
+# Creates data/app.db — ~21,393 rows, 4,164 graph edges
 ```
-Creates `data/app.db` with ~21,393 rows and 4,164 graph edges. Takes ~10 seconds.
 
-### 4 — Start backend
+### 4 — Run
+
 ```bash
+# Terminal 1 — backend
 PYTHONPATH=. uvicorn app.main:app --port 8000 --reload
-```
 
-### 5 — Start frontend
-```bash
+# Terminal 2 — frontend
 cd ../frontend && npm install && npm run dev
 # Open http://localhost:5173
 ```
 
 ---
 
-## API Reference
+## Architecture Decisions
 
-### `GET /api/health`
+### Why SQLite + graph_edges table (not a graph DB)?
+
+The dataset is small (~21K rows). SQLite with indexed joins performs well at this scale. A graph DB (Neo4j, ArangoDB) would add operational complexity for negligible benefit. The `graph_edges` adjacency list handles all traversal queries efficiently.
+
+```sql
+-- Multi-hop traversal: sales order → delivery → billing → journal
+SELECT * FROM graph_edges WHERE source_type='sales_order' AND source_id='740509'
+-- Then follow target_id through each hop
+```
+
+### LLM Prompting Strategy
+
+**Two-call architecture per dynamic query:**
+
+1. **Plan call** — LLM receives the full schema (all 19 tables, columns, join paths) as RAG context and outputs a JSON array of SQL queries to run:
 ```json
-{"status": "ok"}
+{"queries": [{"id":"q1","purpose":"orders by customer","sql":"SELECT..."}]}
 ```
+Temperature = 0 for deterministic SQL.
 
-### `GET /api/graph/overview?max_edges=800`
-Returns all nodes and edges for visualization. Nodes include lightweight metadata (status, amounts, names).
+2. **Answer call** — LLM receives the actual database rows and writes a grounded NL answer. Temperature = 0.3 for natural prose. The answer can only reference what's in the rows — no hallucination.
 
-### `GET /api/graph/stats`
-Returns node and edge counts grouped by type.
+**Why two calls instead of one?** SQL generation requires determinism (temp=0) and schema awareness. Answer generation requires natural language fluency (temp=0.3) and result awareness. Separating them gives better output from both.
 
-### `POST /api/query`
-Synchronous. Body: `{"query": "..."}`. Returns `{plan, result}`.
+**Rule-based fast path:** The 3 task-required query types (trace_flow, top_products, broken_flows) are detected by regex and routed to dedicated handlers — no LLM call needed, always reliable, handles the exact evaluation criteria.
 
-### `POST /api/query/stream`
-Server-Sent Events. Same body. Emits 4 event types in sequence:
+### Guardrails
+
+- **Mutation verbs** blocked before any LLM call: `delete/drop/remove/truncate/update/alter/create`
+- **General knowledge** blocked by pattern: "capital of", "weather in", "write a poem", etc.
+- **Domain signal check**: queries with no O2C keywords and no entity IDs are rejected
+- **SQL execution**: read-only enforced by regex blocking all write keywords before execute
+- **Row cap**: 100 rows maximum per query, prevents runaway queries
+
+### Model Choice
+
+`gemini-2.5-flash-lite` — confirmed working, highest free-tier RPM (~30/min), fast response time. The planner and answer generator share the same model, with graceful fallback to deterministic text when rate-limited.
+
+### Streaming (SSE)
+
+`POST /api/query/stream` emits 4 event types:
 ```
-data: {"type": "plan",   "payload": {...}}     ← query plan immediately
-data: {"type": "result", "payload": {...}}     ← DB result
-data: {"type": "token",  "payload": "word "}  ← NL answer tokens
+data: {"type": "plan",   "payload": {intent/sql, ...}}   — immediately
+data: {"type": "result", "payload": {rows/path, ...}}    — after DB query
+data: {"type": "token",  "payload": "word "}             — NL answer tokens
 data: {"type": "done",   "payload": null}
 ```
 
----
+Frontend reads via `ReadableStream` — users see the NL answer appearing word-by-word while the graph updates simultaneously.
 
-## Query Engine — 4 Intents
+### Conversation Memory
 
-| Intent | Trigger | What runs |
-|--------|---------|-----------|
-| `trace_flow` | "journey", "flow", "trace" + entity ID | Multi-hop SQL: order→delivery→billing→journal→payment |
-| `top_products_by_billing` | "top products", "highest billing", "revenue" | GROUP BY material, JOIN billing headers, ORDER BY |
-| `find_broken_flows` | "broken", "issues", "without", "mismatch" | 7 gap-analysis queries across the pipeline |
-| `lookup_entity` | entity type + ID | Single-entity fetch with optional related data |
+Every request includes `history: [{role, content}]` for the last 6 turns (3 exchanges).
 
-### 7 Break Types (`find_broken_flows`)
-1. `billing_without_delivery` — billed but no delivery in graph
-2. `delivery_without_sales_order` — delivery has no upstream order
-3. `billing_without_journal_entry` — no accounting document posted
-4. `journal_entry_without_clearing` — AR not cleared/paid
-5. `cancelled_without_accounting_doc` — cancelled billing missing reversal entry
-6. `active_txn_on_blocked_partner` — transactions on blocked customer
-7. `amount_mismatch_billing_vs_journal` — billing total ≠ journal sum
-
----
-
-## How the Rule-Based Planner Works
-
-The planner checks regex patterns before ever calling the LLM. Coverage: **19/19 common queries** with zero API calls.
-
-```
-"Show me the full journey for sales order 740509"
-   → regex matches: (sales order|order|so) + 6-digit number + flow keyword
-   → returns trace_flow plan instantly, no Gemini call
-
-"Which products have the highest number of billing documents?"
-   → regex matches: product keyword + billing keyword + ranking keyword
-   → returns top_products_by_billing{sort_by: invoice_count}
-
-"Are there billing docs without journal entries?"
-   → regex matches: billing.*journal pattern
-   → returns find_broken_flows{break_types: [billing_without_journal_entry]}
-
-"Look up customer 310000108"
-   → regex matches: lookup verb + customer + 6-digit number
-   → returns lookup_entity{entity_type: customer}
-```
-
-Only queries with no clear structural match reach Gemini — things like "which customer placed the most orders this quarter". Those are ~5% of real usage.
-
----
-
-## LLM Usage and Rate Limits
-
-| Model | RPM (free tier) | Used for |
-|-------|----------------|---------|
-| `gemini-2.5-flash-lite` | ~30 req/min | Query plan (rare, rule-based covers 95%) + NL answer |
-| `gemini-2.0-flash` | ~15 req/min | ❌ Old model, rate-limited immediately |
-
-**Why 429s happened before:** Two Gemini calls per query (plan + NL answer) on a 15 RPM model = rate-limited on second question. Fixed by:
-1. Switching to `gemini-2.5-flash-lite` (2x RPM headroom)
-2. 95% of queries now rule-based (zero API calls for plan)
-3. NL answer auto-falls back to deterministic synthesizer on any 429 — no errors shown to user
+- **SQL generation**: history injected into LLM context for follow-up questions ("give me orders with this product" → LLM knows which product from history)
+- **Pronoun resolution**: `_resolve_entity_from_history()` extracts entity IDs from history for vague references ("trace its flow", "tell me about that billing doc")
+- **NL answers**: history context included so answers can say "as mentioned earlier..."
 
 ---
 
 ## Graph Visualization
 
-**Layout algorithms:**
-- `breadthfirst` for ≤80 nodes — layers nodes top-to-bottom following edge direction, good for O2C pipelines
-- `cose` (Compound Spring Embedder) for >80 nodes — force-directed physics, clusters connected components
+**Nodes:** Small colored dots (10px). No labels by default — clean network view.
+**Edges:** Directed (`vee` arrows), color `#93c5fd`, 1.5px, 85% opacity.
+**On click:** Floating metadata tooltip appears with entity fields.
+**After query:** Matched nodes glow gold, others dim to 8%, camera animates to fit the subgraph.
+**Controls:** ↩ Overview (resets to full graph), ⌇ Edges toggle (show/hide edges), +/−/⊡ zoom.
 
-**Interaction:**
-- Click node → floating metadata tooltip (animates in, close button)
-- No labels on nodes by default → clean visual
-- ⌇ Edges button → toggle all edge visibility on/off
-- ↩ Overview button → appears after a query, resets to full 466-node graph
-- +/−/⊡ → zoom controls
+**Layout:** `breadthfirst` for query results (≤80 nodes, layered top-to-bottom following O2C flow direction), `cose` for full overview (466 nodes, force-directed clustering).
 
-**Highlighting after a query:**
-```
-Queried nodes  → gold border, glow shadow, full opacity, size 18px
-Other nodes    → dimmed to 8% opacity
-Connecting edges → indigo color, full opacity
-Other edges    → dimmed to 4% opacity
-Camera         → animates to fit highlighted subgraph (500ms)
-```
+---
+
+## Dataset
+
+| Entity | Rows |
+|--------|------|
+| Sales Order Headers | 100 |
+| Sales Order Items | 166 |
+| Schedule Lines | 200 |
+| Delivery Headers | 86 |
+| Delivery Items | 142 |
+| Billing Doc Headers | 163 |
+| Billing Doc Items | 329 |
+| Cancellations | 80 |
+| Journal Entry Items (AR) | 409 |
+| Payments (AR) | 120 |
+| Business Partners | 183 |
+| Addresses | 183 |
+| Customer Company Assignments | 183 |
+| Customer Sales Area Assignments | 557 |
+| Products | 521 |
+| Product Descriptions | 996 |
+| Product Plants | 3,532 |
+| Product Storage Locations | 13,356 |
+| Plants | 87 |
+| **Total** | **~21,393** |
+
+**Graph: 4,164 edges across 10 relationship types**
 
 ---
 
@@ -262,36 +271,8 @@ Camera         → animates to fit highlighted subgraph (500ms)
 
 | Variable | Description | Default |
 |----------|-------------|---------|
-| `GEMINI_API_KEY` | Google Gemini key (free at ai.google.dev) | — |
-| `GROQ_API_KEY` | Groq key (free at console.groq.com) | — |
-| `GEMINI_MODEL` | Gemini model override | `gemini-2.5-flash-lite` |
+| `GEMINI_API_KEY` | Google Gemini key (ai.google.dev) | — |
+| `GROQ_API_KEY` | Groq key (console.groq.com) | — |
+| `GEMINI_MODEL` | Model override | `gemini-2.5-flash-lite` |
 | `GROQ_MODEL` | Groq model override | `llama3-8b-8192` |
 | `APP_DB_PATH` | Custom SQLite path | `<repo>/data/app.db` |
-
----
-
-## Dataset
-
-| Entity | Table | Rows |
-|--------|-------|------|
-| Sales Order Headers | `sales_order_headers` | 100 |
-| Sales Order Items | `sales_order_items` | 166 |
-| Sales Order Schedule Lines | `sales_order_schedule_lines` | 200 |
-| Outbound Delivery Headers | `outbound_delivery_headers` | 86 |
-| Outbound Delivery Items | `outbound_delivery_items` | 142 |
-| Billing Document Headers | `billing_document_headers` | 163 |
-| Billing Document Items | `billing_document_items` | 329 |
-| Billing Document Cancellations | `billing_document_cancellations` | 80 |
-| Journal Entry Items (AR) | `journal_entry_items_ar` | 409 |
-| Payments (AR) | `payments_accounts_receivable` | 120 |
-| Business Partners | `business_partners` | 183 |
-| Business Partner Addresses | `business_partner_addresses` | 183 |
-| Customer Company Assignments | `customer_company_assignments` | 183 |
-| Customer Sales Area Assignments | `customer_sales_area_assignments` | 557 |
-| Products | `products` | 521 |
-| Product Descriptions | `product_descriptions` | 996 |
-| Product Plants | `product_plants` | 3,532 |
-| Product Storage Locations | `product_storage_locations` | 13,356 |
-| Plants | `plants` | 87 |
-
-**Total: ~21,393 rows · 10 edge types · 4,164 graph edges**

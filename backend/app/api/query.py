@@ -25,7 +25,7 @@ from pydantic import BaseModel, ConfigDict
 from sqlalchemy.orm import Session
 
 from app.db.session import get_db
-from app.llm.engine import process_query, answer_from_results, is_out_of_scope, _fallback_answer
+from app.llm.engine import process_query, answer_from_results, is_out_of_scope, _fallback_answer, RateLimitError
 from app.llm.rule_planner import rule_based_plan
 from app.query.execute import execute_query_plan
 from app.query.validation import validate_query_plan
@@ -145,9 +145,15 @@ def query_stream(payload: QueryRequest, db: Session = Depends(get_db)):
 
         try:
             result = process_query(db, query, history)
+        except RateLimitError:
+            yield sse("result", {"queries": [], "total_rows": 0})
+            for tok in stream_words("The API is rate-limited right now — please wait a few seconds and try again."):
+                yield sse("token", tok)
+            yield sse("done", None)
+            return
         except Exception as e:
             yield sse("result", {"queries": [], "total_rows": 0, "error": str(e)})
-            for tok in stream_words(f"Query planning failed: {str(e)[:150]}"):
+            for tok in stream_words(f"Could not execute query: {str(e)[:150]}"):
                 yield sse("token", tok)
             yield sse("done", None)
             return

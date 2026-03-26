@@ -28,8 +28,14 @@ load_dotenv(Path(__file__).resolve().parents[2] / ".env", override=False)
 
 GEMINI_MODEL = "gemini-2.5-flash-lite"   # confirmed working, high RPM free tier
 
+import time as _time
+
+class RateLimitError(Exception):
+    pass
+
 def _call_llm(system: str, user: str, *, temperature: float = 0.0, max_tokens: int = 1024) -> str:
-    """Single LLM call. Gemini first, Groq fallback."""
+    """Single LLM call. Gemini first, Groq fallback. Raises RateLimitError on 429."""
+    from urllib.error import HTTPError
     gemini_key = os.environ.get("GEMINI_API_KEY")
     groq_key   = os.environ.get("GROQ_API_KEY")
 
@@ -42,8 +48,13 @@ def _call_llm(system: str, user: str, *, temperature: float = 0.0, max_tokens: i
         }
         req = urllib.request.Request(url, data=json.dumps(payload).encode(),
                                      headers={"Content-Type": "application/json"}, method="POST")
-        with urllib.request.urlopen(req, timeout=30) as r:
-            return json.loads(r.read())["candidates"][0]["content"]["parts"][0]["text"].strip()
+        try:
+            with urllib.request.urlopen(req, timeout=30) as r:
+                return json.loads(r.read())["candidates"][0]["content"]["parts"][0]["text"].strip()
+        except HTTPError as e:
+            if e.code == 429:
+                raise RateLimitError("Rate limited")
+            raise
 
     if groq_key:
         url = "https://api.groq.com/openai/v1/chat/completions"
@@ -55,8 +66,13 @@ def _call_llm(system: str, user: str, *, temperature: float = 0.0, max_tokens: i
         req = urllib.request.Request(url, data=json.dumps(payload).encode(),
                                      headers={"Authorization": f"Bearer {groq_key}",
                                               "Content-Type": "application/json"}, method="POST")
-        with urllib.request.urlopen(req, timeout=30) as r:
-            return json.loads(r.read())["choices"][0]["message"]["content"].strip()
+        try:
+            with urllib.request.urlopen(req, timeout=30) as r:
+                return json.loads(r.read())["choices"][0]["message"]["content"].strip()
+        except HTTPError as e:
+            if e.code == 429:
+                raise RateLimitError("Rate limited")
+            raise
 
     raise RuntimeError("No LLM provider. Set GEMINI_API_KEY or GROQ_API_KEY in backend/.env")
 
@@ -226,6 +242,13 @@ _OOS_PATTERNS = [
     r"(generate|create|draw)\s+an?\s+(image|picture|video)",
 ]
 
+# Mutation verbs — always reject, never generate SQL for these
+_MUTATION_PATTERNS = re.compile(
+    r"\b(delete|drop|remove|truncate|update|modify|change|alter|create|insert|"
+    r"add\s+new|cancel\s+all|clear\s+all|wipe|reset\s+the)\b",
+    re.IGNORECASE
+)
+
 _O2C_SIGNALS = [
     "order", "delivery", "billing", "invoice", "payment", "customer",
     "product", "material", "shipment", "journal", "accounting", "plant",
@@ -236,7 +259,11 @@ _O2C_SIGNALS = [
 
 def is_out_of_scope(query: str) -> bool:
     t = query.lower()
+    # Explicit general-knowledge patterns
     if any(re.search(p, t) for p in _OOS_PATTERNS):
+        return True
+    # Mutation verbs are always out of scope (read-only system)
+    if _MUTATION_PATTERNS.search(t):
         return True
     # If no O2C signals AND no numbers (entity IDs), likely off-topic
     has_signal = any(s in t for s in _O2C_SIGNALS)
@@ -288,7 +315,10 @@ def plan_queries(question: str, history: list[dict]) -> list[dict]:
 
     user_msg = f"{ctx}User question: {question}\n\nPlan the SQL queries:"
 
-    raw = _call_llm(PLAN_SYSTEM, user_msg, temperature=0.0, max_tokens=800)
+    try:
+        raw = _call_llm(PLAN_SYSTEM, user_msg, temperature=0.0, max_tokens=800)
+    except RateLimitError:
+        raise RateLimitError("Rate limit reached — please wait a moment and try again")
 
     # Strip markdown fences
     raw = re.sub(r"^```(?:json)?\s*", "", raw.strip(), flags=re.IGNORECASE)
@@ -393,6 +423,9 @@ def answer_from_results(question: str, query_results: list[dict], history: list[
         words = answer.split(" ")
         for i, w in enumerate(words):
             yield w + (" " if i < len(words) - 1 else "")
+    except RateLimitError:
+        # Rate limited on answer generation — use deterministic fallback
+        yield from _fallback_answer(question, query_results)
     except Exception:
         yield from _fallback_answer(question, query_results)
 
