@@ -97,12 +97,12 @@ export default function GraphView({ nodes, edges, highlightedIds = [], onResetVi
           selector: 'edge',
           style: {
             'curve-style': 'bezier',
-            'width': 1,
-            'line-color': '#bfdbfe',
-            'target-arrow-color': '#bfdbfe',
-            'target-arrow-shape': 'triangle',
-            'target-arrow-size': 6,
-            'opacity': 0.7,
+            'width': 1.5,
+            'line-color': '#93c5fd',
+            'target-arrow-color': '#93c5fd',
+            'target-arrow-shape': 'vee',
+            'arrow-scale': 0.8,
+            'opacity': 0.85,
           },
         },
         {
@@ -136,7 +136,7 @@ export default function GraphView({ nodes, edges, highlightedIds = [], onResetVi
         },
         {
           selector: 'edge.dimmed',
-          style: { 'opacity': 0.04 },
+          style: { 'opacity': 0.1 },
         },
         {
           selector: 'edge.highlighted-edge',
@@ -221,7 +221,7 @@ export default function GraphView({ nodes, edges, highlightedIds = [], onResetVi
     if (!cy) return
     const next = !edgesVisible
     setEdgesVisible(next)
-    cy.edges().style({ opacity: next ? 0.6 : 0 })
+    cy.edges().style({ opacity: next ? 0.85 : 0 })
   }, [edgesVisible])
 
   const isEmpty = nodes.length === 0

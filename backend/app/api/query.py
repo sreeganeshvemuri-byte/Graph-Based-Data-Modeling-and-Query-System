@@ -1,9 +1,24 @@
+"""
+Query API — two-path architecture:
+
+PATH A — Structured (fast, no SQL generation):
+  Used for the 3 task-required query types detected by rule-based planner:
+  trace_flow, top_products_by_billing, find_broken_flows
+  → Pydantic-validated plan → dedicated SQL handler → NL answer
+
+PATH B — Dynamic SQL (LLM generates SQL from schema context):
+  Used for everything else — lookup_entity, free-form questions,
+  follow-ups, product searches, customer analysis, etc.
+  → LLM generates SQL → execute safely → LLM answers from rows
+
+Both paths stream via SSE: plan → result → tokens → done
+"""
 from __future__ import annotations
 
 import json
 import os
-import urllib.request
-from typing import Any, AsyncIterator
+from pathlib import Path
+from typing import Any, Iterator
 
 from fastapi import APIRouter, Depends
 from fastapi.responses import StreamingResponse
@@ -12,36 +27,43 @@ from sqlalchemy.orm import Session
 
 from app.db.session import get_db
 from app.llm.planner import generate_query_plan
+from app.llm.sql_engine import (
+    generate_sql,
+    execute_safe_sql,
+    generate_nl_answer,
+    is_out_of_scope,
+    _fallback_nl_answer,
+)
 from app.query.execute import execute_query_plan
 from app.query.validation import validate_query_plan
-from dotenv import load_dotenv
-from pathlib import Path
 
+from dotenv import load_dotenv
 load_dotenv(Path(__file__).resolve().parents[2] / ".env", override=False)
 
 router = APIRouter(tags=["query"])
 
 
-class HistoryTurn(BaseModel):
-    role: str          # "user" or "assistant"
-    content: str       # plain text summary of the turn
+# ─── Request / Response models ────────────────────────────────────────────────
 
+class HistoryTurn(BaseModel):
+    role: str
+    content: str
     model_config = ConfigDict(extra="forbid")
 
 
 class QueryRequest(BaseModel):
     query: str
-    history: list[HistoryTurn] = []   # last N turns for context, empty = no context
-
+    history: list[HistoryTurn] = []
     model_config = ConfigDict(extra="forbid")
 
 
 class QueryResponse(BaseModel):
     plan: dict[str, Any]
     result: Any
-
     model_config = ConfigDict(extra="forbid")
 
+
+# ─── Synchronous endpoint ────────────────────────────────────────────────────
 
 @router.post("", response_model=QueryResponse)
 def query_endpoint(payload: QueryRequest, db: Session = Depends(get_db)) -> QueryResponse:
@@ -52,286 +74,232 @@ def query_endpoint(payload: QueryRequest, db: Session = Depends(get_db)) -> Quer
     return QueryResponse(plan=validated_plan, result=result)
 
 
-# ─────────────────────────────────────────────
-# Streaming endpoint: POST /api/query/stream
-# Sends Server-Sent Events (SSE):
-#   data: {"type":"plan",  "payload": {...}}
-#   data: {"type":"result","payload": {...}}
-#   data: {"type":"token", "payload": "word "}   ← streamed NL answer tokens
-#   data: {"type":"done"}
-# ─────────────────────────────────────────────
-
-_NL_SYSTEM_PROMPT = (
-    "You are a helpful analyst for an SAP Order-to-Cash (O2C) system. "
-    "Given a user query, optional conversation history, and the structured result data, "
-    "write a concise natural language answer (2–5 sentences). "
-    "Be data-specific: mention IDs, counts, amounts, statuses. "
-    "If the user is asking a follow-up question, reference the previous context naturally. "
-    "Do NOT invent data. If the result is empty, say so clearly. "
-    "Do NOT start with 'Based on the data' or 'Sure'. Get straight to the answer."
-)
-
-
-def _build_nl_prompt(user_query: str, plan: dict, result: dict, history: list | None = None) -> str:
-    # Build conversation context string from history (last 3 turns max to stay concise)
-    history_str = ""
-    if history:
-        recent = history[-6:]  # last 3 exchanges = 6 turns
-        lines = []
-        for turn in recent:
-            role = "User" if turn["role"] == "user" else "Assistant"
-            lines.append(f"{role}: {turn['content']}")
-        history_str = "\n".join(lines) + "\n\n"
-
-    intent = plan.get("intent", "")
-
-    if intent == "reject":
-        return f"{history_str}Query: {user_query}\nSystem response: {plan.get('clarification_needed', '')}\nWrite one sentence explaining this to the user."
-
-    if intent == "trace_flow":
-        nodes = result.get("path", {}).get("nodes", [])
-        edges = result.get("path", {}).get("edges", [])
-        node_types: dict[str, int] = {}
-        for n in nodes:
-            node_types[n["type"]] = node_types.get(n["type"], 0) + 1
-        summary = f"Found {len(nodes)} nodes ({node_types}) and {len(edges)} edges tracing {plan.get('entity_type')} {plan.get('entity_id')}."
-        return f"{history_str}User query: {user_query}\nResult summary: {summary}\nAnswer:"
-
-    if intent == "top_products_by_billing":
-        top3 = result.get("results", [])[:3]
-        return (
-            f"{history_str}User query: {user_query}\n"
-            f"Top products (first 3 of {len(result.get('results',[]))}): {json.dumps(top3)}\n"
-            f"Sort by: {plan.get('sort_by')}\nAnswer:"
-        )
-
-    if intent == "find_broken_flows":
-        issues = result.get("issues", [])
-        by_type: dict[str, int] = {}
-        for i in issues:
-            bt = i.get("break_type", "unknown")
-            by_type[bt] = by_type.get(bt, 0) + 1
-        return (
-            f"{history_str}User query: {user_query}\n"
-            f"Found {len(issues)} total issues: {by_type}\n"
-            f"Answer:"
-        )
-
-    if intent == "lookup_entity":
-        entity = result.get("entity", {})
-        related_keys = list(result.get("related", {}).keys())
-        return (
-            f"{history_str}User query: {user_query}\n"
-            f"Entity type: {plan.get('entity_type')} | ID: {plan.get('entity_id')}\n"
-            f"Entity data: {json.dumps(entity)}\n"
-            f"Related: {related_keys}\n"
-            f"Answer:"
-        )
-
-    return f"User query: {user_query}\nResult: {json.dumps(result)[:500]}\nAnswer:"
-
-
-def _gemini_stream(prompt: str) -> Iterator[str]:
-    """Stream tokens from Gemini generateContent (non-streaming REST, chunk the response)."""
-    api_key = os.environ.get("GEMINI_API_KEY")
-    if not api_key:
-        return  # caller falls back
-
-    model = os.environ.get("GEMINI_MODEL", "gemini-2.5-flash-lite")
-    url = (
-        f"https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent"
-        f"?key={api_key}"
-    )
-    payload = {
-        "systemInstruction": {"role": "system", "parts": [{"text": _NL_SYSTEM_PROMPT}]},
-        "contents": [{"role": "user", "parts": [{"text": prompt}]}],
-        "generationConfig": {"temperature": 0.3, "maxOutputTokens": 300},
-    }
-    req = urllib.request.Request(
-        url,
-        data=json.dumps(payload).encode(),
-        headers={"Content-Type": "application/json"},
-        method="POST",
-    )
-    try:
-        with urllib.request.urlopen(req, timeout=30) as resp:
-            body = json.loads(resp.read().decode())
-        text = body["candidates"][0]["content"]["parts"][0]["text"]
-        # Simulate streaming by yielding word-by-word
-        words = text.split(" ")
-        for i, word in enumerate(words):
-            yield word + (" " if i < len(words) - 1 else "")
-    except Exception:
-        return  # caller falls back
-
-
-def _groq_stream(prompt: str):
-    """Stream tokens from Groq streaming API."""
-    api_key = os.environ.get("GROQ_API_KEY")
-    if not api_key:
-        yield "No GROQ key."
-        return
-
-    model = os.environ.get("GROQ_MODEL", "llama3-8b-8192")
-    url = "https://api.groq.com/openai/v1/chat/completions"
-    payload = {
-        "model": model,
-        "temperature": 0.3,
-        "max_tokens": 300,
-        "stream": True,
-        "messages": [
-            {"role": "system", "content": _NL_SYSTEM_PROMPT},
-            {"role": "user", "content": prompt},
-        ],
-    }
-    req = urllib.request.Request(
-        url,
-        data=json.dumps(payload).encode(),
-        headers={
-            "Authorization": f"Bearer {api_key}",
-            "Content-Type": "application/json",
-        },
-        method="POST",
-    )
-    try:
-        with urllib.request.urlopen(req, timeout=30) as resp:
-            for raw_line in resp:
-                line = raw_line.decode("utf-8").strip()
-                if not line.startswith("data:"):
-                    continue
-                data_str = line[len("data:"):].strip()
-                if data_str == "[DONE]":
-                    break
-                try:
-                    chunk = json.loads(data_str)
-                    token = chunk["choices"][0]["delta"].get("content", "")
-                    if token:
-                        yield token
-                except Exception:
-                    pass
-    except Exception as e:
-        yield f"(stream error: {e})"
-
-
-# Need Iterator import
-from typing import Iterator
-
-
-def _stream_nl_answer(user_query: str, plan: dict, result: dict, history: list | None = None):
-    prompt = _build_nl_prompt(user_query, plan, result, history=history)
-    provider = "groq" if os.environ.get("GROQ_API_KEY") else "gemini" if os.environ.get("GEMINI_API_KEY") else None
-
-    tokens_yielded = 0
-    if provider == "groq":
-        for token in _groq_stream(prompt):
-            tokens_yielded += 1
-            yield token
-    elif provider == "gemini":
-        for token in _gemini_stream(prompt):
-            tokens_yielded += 1
-            yield token
-
-    # If LLM yielded nothing (rate limit / error), use rule-based fallback
-    if tokens_yielded == 0:
-        yield from _fallback_nl(plan, result)
-
-
-def _fallback_nl(plan: dict, result: dict):
-    """Rule-based NL answer when no LLM is available."""
-    intent = plan.get("intent", "")
-    if intent == "reject":
-        yield plan.get("clarification_needed", "This query is out of scope.")
-        return
-    if intent == "trace_flow":
-        nodes = result.get("path", {}).get("nodes", [])
-        edges = result.get("path", {}).get("edges", [])
-        if not nodes:
-            yield f"No flow data found for {plan.get('entity_type')} {plan.get('entity_id')}."
-            return
-        node_types: dict[str, int] = {}
-        for n in nodes:
-            node_types[n["type"]] = node_types.get(n["type"], 0) + 1
-        parts = [f"{v} {k.replace('_', ' ')}(s)" for k, v in node_types.items()]
-        yield f"Traced {plan.get('entity_type', '').replace('_',' ')} {plan.get('entity_id')}: found {', '.join(parts)} connected by {len(edges)} edge(s) across the O2C pipeline."
-        return
-    if intent == "top_products_by_billing":
-        results = result.get("results", [])
-        if not results:
-            yield "No products found matching your criteria."
-            return
-        top = results[0]
-        yield (
-            f"Top product is {top['product_id']} with "
-            f"{top.get('invoice_count', 0)} invoice(s) and "
-            f"total net amount of {top.get('total_net_amount', 0):.2f}. "
-            f"Retrieved {len(results)} products total."
-        )
-        return
-    if intent == "find_broken_flows":
-        issues = result.get("issues", [])
-        by_type: dict[str, int] = {}
-        for i in issues:
-            bt = i.get("break_type", "unknown")
-            by_type[bt] = by_type.get(bt, 0) + 1
-        if not issues:
-            yield "No broken flows detected in the dataset."
-            return
-        summary = "; ".join(f"{v} {k.replace('_',' ')}" for k, v in list(by_type.items())[:3])
-        yield f"Found {len(issues)} total flow issues: {summary}."
-        return
-    if intent == "lookup_entity":
-        entity = result.get("entity", {})
-        if result.get("error") == "not_found":
-            yield f"{plan.get('entity_type', 'Entity')} {plan.get('entity_id')} was not found in the dataset."
-            return
-        name = entity.get("fullName") or entity.get("productDescription") or entity.get("plantName") or ""
-        amount = entity.get("totalNetAmount") or entity.get("total_net_amount")
-        out = f"Found {plan.get('entity_type','entity').replace('_',' ')} {plan.get('entity_id')}."
-        if name:
-            out += f" Name: {name}."
-        if amount:
-            out += f" Net amount: {float(amount):.2f}."
-        yield out
-        return
-    yield "Query executed successfully."
-
+# ─── SSE helpers ─────────────────────────────────────────────────────────────
 
 def _sse(event_type: str, payload: Any) -> str:
     return f"data: {json.dumps({'type': event_type, 'payload': payload})}\n\n"
 
 
+def _stream_words(text: str) -> Iterator[str]:
+    words = text.split(" ")
+    for i, w in enumerate(words):
+        yield w + (" " if i < len(words) - 1 else "")
+
+
+# ─── Streaming endpoint ───────────────────────────────────────────────────────
+
 @router.post("/stream")
 def query_stream_endpoint(payload: QueryRequest, db: Session = Depends(get_db)):
     """
-    Streaming endpoint. Returns SSE with:
-      {type: 'plan',   payload: {...}}
-      {type: 'result', payload: {...}}
-      {type: 'token',  payload: "word "}  (streamed NL answer)
-      {type: 'done'}
+    SSE streaming endpoint. Emits:
+      {type: "plan",   payload: {intent, ...}}
+      {type: "result", payload: {rows/path/...}}
+      {type: "token",  payload: "word "}   (repeated)
+      {type: "done"}
     """
     history = [{"role": t.role, "content": t.content} for t in payload.history]
 
     def generate():
-        # Step 1 – query plan (history gives context for pronoun resolution)
-        raw_plan = generate_query_plan(payload.query, history=history)
-        validated_plan = validate_query_plan(raw_plan)
-        yield _sse("plan", validated_plan)
+        query = payload.query.strip()
 
-        # Step 2 – execute
-        result = execute_query_plan(db, validated_plan)
-        yield _sse("result", result)
+        # ── Guardrail ─────────────────────────────────────────────────────────
+        if is_out_of_scope(query):
+            plan = {"intent": "reject", "reason": "out_of_scope",
+                    "clarification_needed": "This system only answers questions about the SAP Order-to-Cash dataset."}
+            yield _sse("plan", plan)
+            yield _sse("result", {})
+            yield _sse("token", "This system is designed to answer questions about the SAP Order-to-Cash dataset only. Please ask about orders, deliveries, billing, payments, customers, or products.")
+            yield _sse("done", None)
+            return
 
-        # Step 3 – stream NL answer token-by-token
-        for token in _stream_nl_answer(payload.query, validated_plan, result, history=history):
-            yield _sse("token", token)
+        # ── Path A: Rule-based structured query ───────────────────────────────
+        # Only for the 3 deterministic task examples where we have reliable handlers
+        raw_plan = generate_query_plan(query, history=history)
+        intent = raw_plan.get("intent", "")
+
+        if intent in ("trace_flow", "top_products_by_billing", "find_broken_flows"):
+            validated_plan = validate_query_plan(raw_plan)
+            yield _sse("plan", validated_plan)
+
+            result = execute_query_plan(db, validated_plan)
+            yield _sse("result", result)
+
+            # NL answer
+            for token in _stream_nl_from_structured(query, validated_plan, result, history):
+                yield _sse("token", token)
+
+            yield _sse("done", None)
+            return
+
+        # ── Path B: Dynamic SQL generation ────────────────────────────────────
+        # For everything else: lookups, free-form, product searches, follow-ups
+        plan_meta = {"intent": "sql_query", "query": query}
+        yield _sse("plan", plan_meta)
+
+        # Check if LLM is available
+        has_llm = bool(os.environ.get("GEMINI_API_KEY") or os.environ.get("GROQ_API_KEY"))
+        if not has_llm:
+            yield _sse("result", {"rows": [], "sql": None})
+            yield _sse("token", "No LLM configured. Add GEMINI_API_KEY or GROQ_API_KEY to backend/.env to enable dynamic queries.")
+            yield _sse("done", None)
+            return
+
+        # Generate SQL
+        try:
+            sql = generate_sql(query, history=history)
+        except Exception as e:
+            yield _sse("result", {"rows": [], "sql": None, "error": str(e)})
+            # Fallback answer
+            for token in _stream_words(f"Could not generate SQL: {str(e)[:100]}"):
+                yield _sse("token", token)
+            yield _sse("done", None)
+            return
+
+        if sql is None:
+            yield _sse("result", {"rows": [], "sql": None})
+            yield _sse("token", "This question appears to be outside the scope of the O2C dataset. Please ask about orders, deliveries, invoices, payments, customers, or products.")
+            yield _sse("done", None)
+            return
+
+        # Execute SQL
+        rows, error = execute_safe_sql(db, sql)
+
+        result_payload = {
+            "intent": "sql_query",
+            "sql": sql,
+            "rows": rows,
+            "row_count": len(rows),
+            "error": error,
+        }
+        yield _sse("result", result_payload)
+
+        if error:
+            for token in _stream_words(f"The query encountered an error: {error}. Please rephrase your question."):
+                yield _sse("token", token)
+            yield _sse("done", None)
+            return
+
+        # Generate NL answer from actual rows
+        try:
+            for token in generate_nl_answer(query, sql, rows, history=history):
+                yield _sse("token", token)
+        except Exception:
+            # Fallback no-LLM answer
+            for token in _fallback_nl_answer(query, rows):
+                yield _sse("token", token)
 
         yield _sse("done", None)
 
     return StreamingResponse(
         generate(),
         media_type="text/event-stream",
-        headers={
-            "Cache-Control": "no-cache",
-            "X-Accel-Buffering": "no",
-        },
+        headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
     )
+
+
+# ─── NL answer for structured queries ────────────────────────────────────────
+
+def _stream_nl_from_structured(
+    user_query: str, plan: dict, result: dict, history: list
+) -> Iterator[str]:
+    """
+    Generate NL answer for the 3 structured query types.
+    Uses LLM if available, deterministic fallback otherwise.
+    """
+    intent = plan.get("intent", "")
+    has_llm = bool(os.environ.get("GEMINI_API_KEY") or os.environ.get("GROQ_API_KEY"))
+
+    if has_llm:
+        try:
+            from app.llm.sql_engine import _llm_call, NL_ANSWER_SYSTEM_PROMPT
+            # Build a concise summary of the structured result
+            summary = _summarise_structured_result(intent, plan, result)
+            user_msg = f"User question: {user_query}\n\nData retrieved:\n{summary}\n\nAnswer:"
+
+            # Build conversation context
+            history_str = ""
+            if history:
+                lines = [f"{t['role'].title()}: {t['content']}" for t in history[-4:]]
+                history_str = "\n".join(lines) + "\n\n"
+
+            answer = _llm_call(NL_ANSWER_SYSTEM_PROMPT, history_str + user_msg, max_tokens=300, temperature=0.3)
+            yield from _stream_words(answer)
+            return
+        except Exception:
+            pass  # fall through to deterministic
+
+    # Deterministic fallback
+    yield from _deterministic_nl(intent, plan, result)
+
+
+def _summarise_structured_result(intent: str, plan: dict, result: dict) -> str:
+    """Compact text summary of structured query result for LLM context."""
+    if intent == "trace_flow":
+        nodes = result.get("path", {}).get("nodes", [])
+        edges = result.get("path", {}).get("edges", [])
+        node_types: dict[str, list] = {}
+        for n in nodes:
+            node_types.setdefault(n["type"], []).append(n["id"])
+        lines = [f"Traced {plan.get('entity_type')} {plan.get('entity_id')}:"]
+        for t, ids in node_types.items():
+            lines.append(f"  {t}: {', '.join(ids[:5])}")
+        lines.append(f"Total: {len(nodes)} nodes, {len(edges)} edges")
+        return "\n".join(lines)
+
+    if intent == "top_products_by_billing":
+        results = result.get("results", [])
+        lines = [f"Top {len(results)} products by {plan.get('sort_by')}:"]
+        for r in results[:10]:
+            lines.append(f"  {r['product_id']}: net_amount={r['total_net_amount']:.2f}, invoices={r['invoice_count']}")
+        return "\n".join(lines)
+
+    if intent == "find_broken_flows":
+        issues = result.get("issues", [])
+        by_type: dict[str, int] = {}
+        for i in issues:
+            by_type[i.get("break_type", "?")] = by_type.get(i.get("break_type", "?"), 0) + 1
+        lines = [f"Found {len(issues)} total flow issues:"]
+        for t, c in by_type.items():
+            lines.append(f"  {t}: {c}")
+        return "\n".join(lines)
+
+    return json.dumps(result, default=str)[:500]
+
+
+def _deterministic_nl(intent: str, plan: dict, result: dict) -> Iterator[str]:
+    """No-LLM fallback for structured results."""
+    if intent == "trace_flow":
+        nodes = result.get("path", {}).get("nodes", [])
+        edges = result.get("path", {}).get("edges", [])
+        if not nodes:
+            yield from _stream_words(f"No flow data found for {plan.get('entity_type')} {plan.get('entity_id')}.")
+            return
+        node_types: dict[str, int] = {}
+        for n in nodes:
+            node_types[n["type"]] = node_types.get(n["type"], 0) + 1
+        parts = [f"{v} {k.replace('_',' ')}" for k, v in node_types.items()]
+        yield from _stream_words(f"Traced {plan.get('entity_type','').replace('_',' ')} {plan.get('entity_id')}: found {', '.join(parts)} connected by {len(edges)} edge(s).")
+        return
+
+    if intent == "top_products_by_billing":
+        results = result.get("results", [])
+        if not results:
+            yield from _stream_words("No products found.")
+            return
+        top = results[0]
+        yield from _stream_words(
+            f"Top product: {top['product_id']} with {top.get('invoice_count',0)} invoice(s) and net amount {top.get('total_net_amount',0):.2f}. "
+            f"Retrieved {len(results)} products total."
+        )
+        return
+
+    if intent == "find_broken_flows":
+        issues = result.get("issues", [])
+        if not issues:
+            yield from _stream_words("No broken flows detected in the dataset.")
+            return
+        by_type: dict[str, int] = {}
+        for i in issues:
+            by_type[i.get("break_type","?")] = by_type.get(i.get("break_type","?"),0)+1
+        summary = "; ".join(f"{c} {t.replace('_',' ')}" for t,c in list(by_type.items())[:3])
+        yield from _stream_words(f"Found {len(issues)} total flow issues: {summary}.")

@@ -20,17 +20,22 @@ function PlanBadge({ plan }) {
     top_products_by_billing: '#0891b2',
     find_broken_flows: '#dc2626',
     lookup_entity: '#16a34a',
+    sql_query: '#7c3aed',
     reject: '#94a3b8',
   }
+  const label = plan.intent === 'sql_query' ? '⚡ sql query' : (plan.intent?.replace(/_/g, ' ') || '')
   return (
     <div className="plan-badge-wrap">
       <button className="plan-badge-btn" onClick={() => setOpen(o => !o)}
         style={{ borderColor: intentColors[plan.intent] || '#e2e8f0', color: intentColors[plan.intent] || '#94a3b8' }}>
         <span className="plan-badge-arrow" style={{ transform: open ? 'rotate(90deg)' : 'none' }}>▶</span>
-        {plan.intent?.replace(/_/g, ' ')}
+        {label}
       </button>
       {open && (
-        <pre className="plan-badge-json">{JSON.stringify(plan, null, 2)}</pre>
+        <div className="plan-detail">
+          {plan.sql && <pre className="plan-sql">{plan.sql}</pre>}
+          {!plan.sql && <pre className="plan-badge-json">{JSON.stringify(plan, null, 2)}</pre>}
+        </div>
       )}
     </div>
   )
@@ -45,6 +50,10 @@ function StatPills({ result, plan }) {
   if (result.intent === 'find_broken_flows') {
     const n = result.issues?.length || 0
     pills.push({ label: n > 0 ? `${n} issues found` : 'No issues', color: n > 0 ? '#dc2626' : '#16a34a' })
+  }
+  if (result.intent === 'sql_query' || result.row_count !== undefined) {
+    const n = result.row_count ?? result.rows?.length ?? 0
+    pills.push({ label: `${n} row${n !== 1 ? 's' : ''}`, color: '#7c3aed' })
   }
   if (!pills.length) return null
   return (
@@ -154,10 +163,41 @@ function Message({ msg }) {
         {result?.intent === 'top_products_by_billing' && <ResultTable rows={result.results} />}
         {result?.intent === 'find_broken_flows' && <IssueList issues={result.issues} />}
         {result?.intent === 'lookup_entity' && <EntityCard result={result} />}
+        {(result?.intent === 'sql_query' || result?.rows !== undefined) && result?.rows?.length >= 0 && (
+          <SqlRowsTable rows={result.rows} sql={result.sql} />
+        )}
       </div>
     </div>
   )
 }
+
+function SqlRowsTable({ rows, sql }) {
+  const [showSql, setShowSql] = useState(false)
+  if (!rows || rows.length === 0) return (
+    <div className="sql-empty">No matching records found in the dataset.</div>
+  )
+  const keys = Object.keys(rows[0])
+  return (
+    <div className="sql-result-wrap">
+      <div className="result-table-wrap">
+        <table className="result-table">
+          <thead>
+            <tr>{keys.map(k => <th key={k}>{k.replace(/([A-Z])/g, ' $1').trim()}</th>)}</tr>
+          </thead>
+          <tbody>
+            {rows.slice(0, 20).map((row, i) => (
+              <tr key={i}>
+                {keys.map(k => <td key={k}>{row[k] != null ? String(row[k]) : '—'}</td>)}
+              </tr>
+            ))}
+          </tbody>
+        </table>
+        {rows.length > 20 && <p className="result-more">+{rows.length - 20} more rows</p>}
+      </div>
+    </div>
+  )
+}
+
 
 export default function ChatPanel({ onResult }) {
   const [messages, setMessages] = useState([])
