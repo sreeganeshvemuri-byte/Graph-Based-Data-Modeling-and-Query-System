@@ -136,7 +136,7 @@ def _quick_metadata(db: Session, node_type: str, node_id: str) -> dict:
 
 @router.get("/overview", response_model=GraphOverviewResponse)
 def graph_overview(
-    max_edges: int = Query(default=800, ge=1, le=5000),
+    max_edges: int = Query(default=800, ge=1, le=10000),
     node_types: str = Query(default="", description="Comma-separated node types to filter, e.g. sales_order,billing_document"),
     db: Session = Depends(get_db),
 ) -> GraphOverviewResponse:

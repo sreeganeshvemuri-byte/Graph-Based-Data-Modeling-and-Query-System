@@ -1,4 +1,4 @@
-import { useEffect, useState, useCallback } from 'react'
+import { useEffect, useState, useCallback, useRef } from 'react'
 import GraphView from './components/GraphView'
 import ChatPanel from './components/ChatPanel'
 import './App.css'
@@ -93,17 +93,34 @@ export default function App() {
   const [overviewData, setOverviewData] = useState(null)
   const [viewMode, setViewMode] = useState('overview')
 
-  useEffect(() => {
-    fetch(`${API_BASE}/graph/overview?max_edges=800`)
+  const [graphFilter, setGraphFilter] = useState('core')  // 'core' | 'all' | 'orders' | 'billing'
+
+  const GRAPH_VIEWS = {
+    core:    { label: 'Core Flow (800)',  max_edges: 800,  node_types: '' },
+    orders:  { label: 'Orders & Delivery', max_edges: 5000, node_types: 'sales_order,delivery,customer' },
+    billing: { label: 'Billing & Payments', max_edges: 5000, node_types: 'billing_document,accounting_document,payment' },
+    all:     { label: 'Full Graph (all)', max_edges: 5000, node_types: '' },
+  }
+
+  const loadGraph = useCallback((filter) => {
+    const view = GRAPH_VIEWS[filter]
+    setGraphStatus('loading')
+    const params = new URLSearchParams({ max_edges: String(view.max_edges) })
+    if (view.node_types) params.set('node_types', view.node_types)
+    fetch(`${API_BASE}/graph/overview?${params}`)
       .then(r => { if (!r.ok) throw new Error(); return r.json() })
       .then(data => {
         const built = buildGraphFromOverview(data)
         setOverviewData(built)
         setGraphData(built)
+        setViewMode('overview')
+        setHighlightedIds([])
         setGraphStatus('ok')
       })
       .catch(() => setGraphStatus('error'))
   }, [])
+
+  useEffect(() => { loadGraph('core') }, [])
 
   const handleQueryResult = useCallback((result) => {
     if (!result || result.intent === 'reject') return
@@ -118,6 +135,12 @@ export default function App() {
     if (overviewData) { setGraphData(overviewData); setHighlightedIds([]); setViewMode('overview') }
   }, [overviewData])
 
+  const handleFilterChange = useCallback((e) => {
+    const val = e.target.value
+    setGraphFilter(val)
+    loadGraph(val)
+  }, [loadGraph])
+
   return (
     <div className="app">
       <header className="app-header">
@@ -127,6 +150,19 @@ export default function App() {
           <span className="header-title">Order to Cash</span>
         </div>
         <div className="app-header-right">
+          {viewMode === 'query' && (
+            <button className="reset-btn" onClick={handleResetGraph}>← Overview</button>
+          )}
+          <select
+            className="graph-view-select"
+            value={graphFilter}
+            onChange={handleFilterChange}
+            disabled={graphStatus === 'loading'}
+          >
+            {Object.entries(GRAPH_VIEWS).map(([k, v]) => (
+              <option key={k} value={k}>{v.label}</option>
+            ))}
+          </select>
           <span className="app-stats">{graphData.nodes.length} nodes · {graphData.edges.length} edges</span>
           <span className="app-status">
             <span className={`status-dot ${graphStatus === 'ok' ? 'status-ok' : graphStatus === 'error' ? 'status-error' : 'status-loading'}`} />
