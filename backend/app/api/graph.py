@@ -75,6 +75,59 @@ def _quick_metadata(db: Session, node_type: str, node_id: str) -> dict:
                 return {
                     "full_name": row.fullName,
                     "is_blocked": row.isBlocked,
+                    "region": row.region,
+                }
+        elif node_type == "accounting_document":
+            from app.db.models import JournalEntryItemsAR
+            from sqlalchemy import select
+            row = db.execute(
+                select(JournalEntryItemsAR).where(JournalEntryItemsAR.accountingDocument == node_id)
+            ).scalars().first()
+            if row:
+                return {
+                    "company_code": row.companyCode,
+                    "fiscal_year": row.fiscalYear,
+                    "posting_date": row.postingDate.isoformat() if row.postingDate else None,
+                    "customer": row.customer,
+                }
+        elif node_type == "product":
+            from app.db.models import Product, ProductDescription
+            from sqlalchemy import select
+            row = db.get(Product, node_id)
+            if row:
+                desc = db.execute(
+                    select(ProductDescription).where(
+                        ProductDescription.product == node_id,
+                        ProductDescription.language == "EN"
+                    )
+                ).scalars().first()
+                return {
+                    "product_type": row.productType,
+                    "product_group": row.productGroup,
+                    "description": desc.productDescription if desc else None,
+                    "is_marked_for_deletion": row.isMarkedForDeletion,
+                }
+        elif node_type == "plant":
+            from app.db.models import Plant
+            row = db.get(Plant, node_id)
+            if row:
+                return {
+                    "plant_name": row.plantName,
+                    "sales_organization": row.salesOrganization,
+                }
+        elif node_type == "payment":
+            from app.db.models import PaymentsAccountsReceivable
+            from sqlalchemy import select
+            row = db.execute(
+                select(PaymentsAccountsReceivable).where(
+                    PaymentsAccountsReceivable.accountingDocument == node_id
+                )
+            ).scalars().first()
+            if row:
+                return {
+                    "customer": row.customer,
+                    "posting_date": row.postingDate.isoformat() if row.postingDate else None,
+                    "clearing_doc": row.clearingAccountingDocument,
                 }
     except Exception:
         pass
