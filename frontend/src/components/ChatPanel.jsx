@@ -6,11 +6,11 @@ const API_STREAM = `${API_BASE}/query/stream`
 
 const SUGGESTIONS = [
   'Show me the full journey for sales order 740509',
-  'Trace the full flow of billing document 90504274',
+  'Which customer has the highest net value order?',
+  'All orders containing product S8907367010814',
   'Which products have the highest number of billing documents?',
   'Find all data quality and broken flow issues',
-  'Identify sales orders with incomplete flows',
-  'Look up customer 310000108',
+  'Summarise this dataset',
 ]
 
 function PlanBadge({ plan }) {
@@ -51,8 +51,8 @@ function StatPills({ result, plan }) {
     const n = result.issues?.length || 0
     pills.push({ label: n > 0 ? `${n} issues found` : 'No issues', color: n > 0 ? '#dc2626' : '#16a34a' })
   }
-  if (result.intent === 'sql_query' || result.row_count !== undefined) {
-    const n = result.row_count ?? result.rows?.length ?? 0
+  if (result.intent === 'sql_query' || result.total_rows !== undefined || result.rows !== undefined) {
+    const n = result.total_rows ?? result.row_count ?? result.rows?.length ?? 0
     pills.push({ label: `${n} row${n !== 1 ? 's' : ''}`, color: '#7c3aed' })
   }
   if (!pills.length) return null
@@ -163,37 +163,57 @@ function Message({ msg }) {
         {result?.intent === 'top_products_by_billing' && <ResultTable rows={result.results} />}
         {result?.intent === 'find_broken_flows' && <IssueList issues={result.issues} />}
         {result?.intent === 'lookup_entity' && <EntityCard result={result} />}
-        {(result?.intent === 'sql_query' || result?.rows !== undefined) && result?.rows?.length >= 0 && (
-          <SqlRowsTable rows={result.rows} sql={result.sql} />
+        {(result?.intent === 'sql_query' || result?.queries !== undefined || result?.rows !== undefined) && (
+          <SqlResultBlock result={result} />
         )}
       </div>
     </div>
   )
 }
 
-function SqlRowsTable({ rows, sql }) {
-  const [showSql, setShowSql] = useState(false)
-  if (!rows || rows.length === 0) return (
-    <div className="sql-empty">No matching records found in the dataset.</div>
-  )
-  const keys = Object.keys(rows[0])
+function SqlResultBlock({ result }) {
+  // result has .queries: [{id, purpose, sql, rows, row_count, error}]
+  // OR old shape: .rows, .sql
+  const queries = result?.queries || (result?.rows !== undefined ? [{id:'q1', purpose:'', sql: result.sql, rows: result.rows, row_count: result.row_count ?? result.rows?.length, error: result.error}] : [])
+  if (!queries.length) return null
+
   return (
     <div className="sql-result-wrap">
-      <div className="result-table-wrap">
-        <table className="result-table">
-          <thead>
-            <tr>{keys.map(k => <th key={k}>{k.replace(/([A-Z])/g, ' $1').trim()}</th>)}</tr>
-          </thead>
-          <tbody>
-            {rows.slice(0, 20).map((row, i) => (
-              <tr key={i}>
-                {keys.map(k => <td key={k}>{row[k] != null ? String(row[k]) : '—'}</td>)}
-              </tr>
-            ))}
-          </tbody>
-        </table>
-        {rows.length > 20 && <p className="result-more">+{rows.length - 20} more rows</p>}
-      </div>
+      {queries.map((q, qi) => (
+        <div key={qi} className="sql-query-block">
+          {/* Show SQL on expand */}
+          {q.sql && (
+            <details className="sql-details">
+              <summary className="sql-summary">
+                {q.purpose ? <span className="sql-purpose">{q.purpose}</span> : <span className="sql-purpose">query {qi+1}</span>}
+                <span className="sql-row-count">{(q.row_count ?? q.rows?.length ?? 0)} rows</span>
+              </summary>
+              <pre className="sql-code">{q.sql}</pre>
+            </details>
+          )}
+          {q.error && <div className="sql-error">Error: {q.error}</div>}
+          {q.rows && q.rows.length > 0 && (
+            <div className="result-table-wrap">
+              <table className="result-table">
+                <thead>
+                  <tr>{Object.keys(q.rows[0]).map(k => <th key={k}>{k.replace(/([A-Z])/g, ' $1').trim()}</th>)}</tr>
+                </thead>
+                <tbody>
+                  {q.rows.slice(0, 20).map((row, i) => (
+                    <tr key={i}>
+                      {Object.keys(q.rows[0]).map(k => <td key={k}>{row[k] != null ? String(row[k]) : '—'}</td>)}
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+              {q.rows.length > 20 && <p className="result-more">+{q.rows.length - 20} more rows</p>}
+            </div>
+          )}
+          {q.rows && q.rows.length === 0 && !q.error && (
+            <div className="sql-empty">No records found for this query.</div>
+          )}
+        </div>
+      ))}
     </div>
   )
 }
